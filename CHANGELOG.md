@@ -4,6 +4,13 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.5.3] - 2026-05-24 (fix: world delete now removes files from disk)
+
+### Fixed
+- `worlds/registry.py` `remove()` now calls `shutil.rmtree(data/worlds/<id>/)` so deleted worlds don't reappear after a restart
+
+---
+
 ## [0.5.2] - 2026-05-24 (stop and restart)
 
 ### Added

@@ -36,6 +36,15 @@ class WorldRegistry:
         world = self._worlds.pop(world_id, None)
         if world:
             world._loop.stop()
+
+        # delete from disk so it doesn't reload on restart
+        world_dir = _DATA_ROOT / world_id
+        if world_dir.exists():
+            import shutil
+            shutil.rmtree(world_dir)
+            log.info("World deleted from disk: %s", world_dir)
+
+        if world:
             log.info("World removed: %s", world_id)
 
     # --- persistence: load worlds from data/worlds/<id>/config.json ---

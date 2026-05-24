@@ -22,15 +22,11 @@ Handler = Callable[..., Awaitable[None]]
 class ScriptContext:
     def __init__(self, world_id: str):
         self.world_id = world_id
-        # event name -> list of handler callables
-        self._rules: dict[str, list[Handler]] = {}
-        # list of (module, run callable) for routines
-        self._routines: list[tuple[str, Handler]] = []
-        # workflow name -> on_progress callable
+        self._rules:     dict[str, list[Handler]] = {}
+        self._routines:  list[tuple[str, Handler]] = []
         self._workflows: dict[str, Handler] = {}
 
     def load(self, scripts_dir: Path):
-        """Load all scripts from the world's scripts directory."""
         for category in ("rules", "routines", "workflows"):
             d = scripts_dir / category
             if not d.exists():
@@ -46,14 +42,13 @@ class ScriptContext:
             spec.loader.exec_module(mod)
 
             if category == "rules":
-                # register any on_<event> functions
                 for attr in dir(mod):
                     if attr.startswith("on_"):
-                        event = attr[3:]  # strip "on_"
+                        event = attr[3:]
                         fn = getattr(mod, attr)
                         if callable(fn):
                             self._rules.setdefault(event, []).append(fn)
-                            log.debug("[%s] rule registered: %s -> %s", self.world_id, event, name)
+                            log.debug("[%s] rule registered: %s → %s", self.world_id, event, name)
 
             elif category == "routines":
                 if hasattr(mod, "run") and callable(mod.run):
@@ -68,13 +63,33 @@ class ScriptContext:
         except Exception:
             log.exception("[%s] Failed to load script: %s", self.world_id, path)
 
-    # --- dispatch ---
+    # ── dispatch ──────────────────────────────────────────────────────────────
 
     async def fire_rule(self, event: str, **kwargs: Any):
-        for handler in self._rules.get(event, []):
+        handlers = self._rules.get(event, [])
+        if not handlers:
+            return
+
+        # pull debug logger if player is in kwargs
+        player = kwargs.get("player")
+        world  = kwargs.get("world")
+        dbg = world.get_debug_logger(player.id) if (world and player) else None
+
+        for handler in handlers:
+            script_name = getattr(handler, "__module__", "?")
+            ctx_summary = (
+                f"room={kwargs['room'].id}" if "room" in kwargs else ""
+            )
+            if dbg:
+                dbg.script_trigger(script_name, event, ctx_summary)
+            if player:
+                player.add_history("script", f"[{event}] {script_name}")
+
             try:
                 await handler(**kwargs)
             except Exception:
+                if dbg:
+                    dbg.error(f"Rule handler '{script_name}' raised an exception")
                 log.exception("[%s] Rule handler error for event '%s'", self.world_id, event)
 
     async def run_routines(self, world: "WorldInstance"):
@@ -90,7 +105,20 @@ class ScriptContext:
         if fn is None:
             log.warning("[%s] Unknown workflow: %s", self.world_id, workflow)
             return
+
+        player = kwargs.get("player")
+        world  = kwargs.get("world")
+        dbg = world.get_debug_logger(player.id) if (world and player) else None
+        step = kwargs.get("step", "?")
+
+        if dbg:
+            dbg.script_trigger(f"workflow:{workflow}", "on_progress", f"step={step}")
+        if player:
+            player.add_history("script", f"[workflow:{workflow}] step={step}")
+
         try:
             await fn(**kwargs)
         except Exception:
+            if dbg:
+                dbg.error(f"Workflow '{workflow}' raised an exception at step={step}")
             log.exception("[%s] Workflow error: %s", self.world_id, workflow)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from world.map import WorldMap
 from entities.player import Player
@@ -14,6 +14,10 @@ from network.sessions import SessionManager
 from engine.loop import GameLoop
 from gm.interpreter import GMInterpreter
 from scripting.context import ScriptContext
+from debug.player_log import PlayerDebugLogger, is_enabled as debug_enabled
+
+if TYPE_CHECKING:
+    pass
 
 log = logging.getLogger(__name__)
 
@@ -25,22 +29,24 @@ class WorldConfig:
     description: str = ""
     max_players: int = 50
     ollama_model: str = "llama3"
-    # arbitrary world-level flags scripts can read/set
     flags: set = field(default_factory=set)
 
 
 class WorldInstance:
     def __init__(self, config: WorldConfig):
-        self.config = config
-        self.map = WorldMap()
-        self.players: dict[str, Player] = {}
-        self.npcs: dict[str, NPC] = {}
+        self.config  = config
+        self.map     = WorldMap()
+        self.players:  dict[str, Player]  = {}
+        self.npcs:     dict[str, NPC]     = {}
         self.monsters: dict[str, Monster] = {}
-        self.items: dict[str, Item] = {}
+        self.items:    dict[str, Item]    = {}
         self.sessions = SessionManager()
-        self.gm = GMInterpreter(model=config.ollama_model)
-        self.scripts = ScriptContext(world_id=config.id)
-        self._loop = GameLoop(self._tick)
+        self.gm       = GMInterpreter(model=config.ollama_model)
+        self.scripts  = ScriptContext(world_id=config.id)
+        self._loop    = GameLoop(self._tick)
+        self._debug_loggers: dict[str, PlayerDebugLogger] = {}
+
+    # ── identity ──────────────────────────────────────────────────────────────
 
     @property
     def id(self) -> str:
@@ -54,19 +60,34 @@ class WorldInstance:
     def player_count(self) -> int:
         return len(self.players)
 
-    # --- player lifecycle ---
+    # ── debug logger access ───────────────────────────────────────────────────
+
+    def get_debug_logger(self, player_id: str) -> Optional[PlayerDebugLogger]:
+        """Returns the debug logger for a player, or None if debug is off."""
+        return self._debug_loggers.get(player_id)
+
+    # ── player lifecycle ──────────────────────────────────────────────────────
 
     def join(self, session_id: str, player_name: str) -> Player:
-        player_id = str(uuid.uuid4())
+        player_id  = str(uuid.uuid4())
         start_room = self.map.default_entry_room()
         player = Player(id=player_id, name=player_name, room_id=start_room)
         player.session_id = session_id
         self.players[player_id] = player
+
         room = self.map.get_room(start_room)
         if room:
             room.add_entity(player_id)
         self.sessions.bind_player(session_id, player_id)
         self._loop.set_player_count(len(self.players))
+
+        # create debug logger if enabled
+        if debug_enabled():
+            dbg = PlayerDebugLogger(self.config.id, player_id, player_name)
+            dbg.join(start_room)
+            self._debug_loggers[player_id] = dbg
+
+        player.add_history("event", f"Entered {self.name} at {room.name if room else start_room}")
         log.info("[%s] Player joined: %s", self.id, player_name)
         return player
 
@@ -78,40 +99,34 @@ class WorldInstance:
             if room:
                 room.remove_entity(player_id)
             self._loop.set_player_count(len(self.players))
+
+            # close debug logger
+            dbg = self._debug_loggers.pop(player_id, None)
+            if dbg:
+                dbg.close()
+
             log.info("[%s] Player left: %s", self.id, player.name)
 
-    # --- room view helper ---
+    # ── room view ─────────────────────────────────────────────────────────────
 
     async def send_room_view(self, session_id: str, player: Player):
         room = self.map.get_room(player.room_id)
         if room is None:
             return
-        others = [
-            self.players[eid].name
-            for eid in room.entity_ids
-            if eid in self.players and eid != player.id
-        ]
-        npcs_here = [
-            self.npcs[eid].name
-            for eid in room.entity_ids
-            if eid in self.npcs
-        ]
-        monsters_here = [
-            self.monsters[eid].name
-            for eid in room.entity_ids
-            if eid in self.monsters
-        ]
+        others   = [self.players[e].name   for e in room.entity_ids if e in self.players   and e != player.id]
+        npcs     = [self.npcs[e].name      for e in room.entity_ids if e in self.npcs]
+        monsters = [self.monsters[e].name  for e in room.entity_ids if e in self.monsters]
         await self.sessions.send(session_id, {
             "type": "room",
             "name": room.name,
             "description": room.description,
             "exits": list(room.exits.keys()),
             "players": others,
-            "npcs": npcs_here,
-            "monsters": monsters_here,
+            "npcs": npcs,
+            "monsters": monsters,
         })
 
-    # --- loop ---
+    # ── loop ──────────────────────────────────────────────────────────────────
 
     def start_loop(self):
         import asyncio
@@ -120,18 +135,13 @@ class WorldInstance:
     async def _tick(self):
         await self.scripts.run_routines(self)
 
-    # --- world flags (for scripts) ---
+    # ── world flags ───────────────────────────────────────────────────────────
 
-    def set_flag(self, flag: str):
-        self.config.flags.add(flag)
+    def set_flag(self, flag: str):   self.config.flags.add(flag)
+    def has_flag(self, flag: str):   return flag in self.config.flags
+    def clear_flag(self, flag: str): self.config.flags.discard(flag)
 
-    def has_flag(self, flag: str) -> bool:
-        return flag in self.config.flags
-
-    def clear_flag(self, flag: str):
-        self.config.flags.discard(flag)
-
-    # --- spawn helpers (called by scripts and GM) ---
+    # ── spawn helpers ─────────────────────────────────────────────────────────
 
     def spawn_monster(self, monster: Monster):
         self.monsters[monster.id] = monster

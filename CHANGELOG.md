@@ -4,6 +4,20 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.5.0] - 2026-05-24 (player history + debug logging)
+
+### Added
+- `debug/player_log.py` — `PlayerDebugLogger`: per-player, per-world session log file written to `logs/<world_id>/<player>_<YYYYMMDD-HHMMSS>.log`. Enabled by `DEBUG_PLAYERS=1` in `.env`. Logs: `JOIN`, `LEAVE`, `MOVE`, `INPUT`, `SCRIPT` (name + event + context), `LLM_SEND` (model, prompt preview, char count), `LLM_RECV` (response preview, elapsed ms), `LLM_ERR`, `STATE` (hp, flags, inventory), `EVENT`, `ERROR`
+- `entities/player.py` — `HistoryEntry` dataclass + `history: list[HistoryEntry]` on `Player`. `add_history(kind, text)` appends with timestamp, capped at 100 entries. `history_for_llm()` returns the last 20 as a plain-text block injected into the Ollama system prompt
+- `.env.example` — `DEBUG_PLAYERS=0` documented
+
+### Changed
+- `gm/interpreter.py` — player input and GM response added to history on every turn; history block injected into Ollama system prompt; `llm_send` / `llm_recv` / `llm_error` debug calls added around every Ollama request; `state_snapshot` called before each LLM request
+- `scripting/context.py` — `fire_rule` and `advance_workflow` call `dbg.script_trigger()` and `player.add_history()` for every handler that runs
+- `worlds/instance.py` — `_debug_loggers: dict[player_id, PlayerDebugLogger]`; logger created on `join()`, closed on `leave()`; `get_debug_logger(player_id)` method for GM and scripts to retrieve it
+
+---
+
 ## [0.4.0] - 2026-05-24 (paste/upload world spec)
 
 ### Added

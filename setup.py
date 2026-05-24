@@ -45,7 +45,10 @@ VENV_PIP    = VENV_DIR / ("Scripts" if _IS_WIN else "bin") / ("pip.exe" if _IS_W
 
 
 def run(cmd, check=True, **kwargs):
-    return subprocess.run(cmd, shell=True, capture_output=True, text=True, check=check, **kwargs)
+    return subprocess.run(
+        cmd, shell=True, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", check=check, **kwargs
+    )
 
 
 # ── steps ─────────────────────────────────────────────────────────────────────
@@ -158,7 +161,8 @@ def _check_model():
     if model not in result.stdout:
         if ask(f"Pull model '{model}' now?", "y").lower() == "y":
             info(f"Pulling {model} …")
-            r = run(f"ollama pull {model}", check=False)
+            # don't capture output — let Ollama's progress bar print to the terminal
+            r = subprocess.run(f"ollama pull {model}", shell=True, check=False)
             ok(f"Model '{model}' pulled") if r.returncode == 0 else warn(f"Pull failed — run: ollama pull {model}")
     else:
         ok(f"Model '{model}' is present")

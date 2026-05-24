@@ -4,6 +4,14 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.5.1] - 2026-05-24 (fix setup.py UnicodeDecodeError on Windows)
+
+### Fixed
+- `setup.py` `run()` helper now passes `encoding="utf-8", errors="replace"` to `subprocess.run` — prevents `UnicodeDecodeError` from cp1252 when capturing output that contains UTF-8 characters (e.g. Ollama's list output)
+- `ollama pull` no longer captures output at all — Ollama's progress bar prints directly to the terminal, avoiding the reader-thread decode error entirely
+
+---
+
 ## [0.5.0] - 2026-05-24 (player history + debug logging)
 
 ### Added

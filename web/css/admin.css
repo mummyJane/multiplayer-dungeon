@@ -66,6 +66,20 @@ td.muted { color: var(--muted); font-style: italic; }
 /* preview */
 #generate-preview { margin-top: 1rem; }
 
+/* build log */
+#build-log-section { margin-top: 1rem; }
+#build-log {
+  background: #0a0a0a; border: 1px solid var(--border);
+  color: #9a9a9a; font-family: var(--font); font-size: 12px;
+  line-height: 1.6; padding: .75rem 1rem;
+  max-height: 300px; overflow-y: auto;
+  white-space: pre-wrap; word-break: break-all;
+}
+#build-log:empty { display: none; }
+
+/* colour the log verb prefixes */
+#build-log { color: #9a9a9a; }
+
 /* manual form */
 .form-row { display: flex; gap: .5rem; flex-wrap: wrap; }
 .form-row input { flex: 1; min-width: 140px; }

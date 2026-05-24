@@ -98,14 +98,36 @@ function showPreview(data) {
   $("generate-preview").classList.remove("hidden");
 }
 
+function showBuildLog(log) {
+  if (!log || !log.length) return;
+  const colours = { SEND: "#7fbf7f", RECV: "#7fbfbf", PARSE: "#bfbf7f",
+                    WRITE: "#bfbf7f", LOAD: "#7fbfbf", SEED: "#7fbfbf",
+                    START: "#7fbf7f", WARN: "#bf9f3f", ERROR: "#bf5f5f",
+                    ABORT: "#bf5f5f" };
+  $("build-log").innerHTML = log.map(line => {
+    const verb = line.split(/\s+/)[0];
+    const col = colours[verb] || "#9a9a9a";
+    const safe = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return `<span style="color:${col}">${safe}</span>`;
+  }).join("\n");
+  $("build-log-section").classList.remove("hidden");
+  $("build-log").scrollTop = $("build-log").scrollHeight;
+}
+
+function clearBuildLog() {
+  $("build-log").textContent = "";
+  $("build-log-section").classList.add("hidden");
+}
+
 // ── paste / generate ──────────────────────────────────────────────────────────
 
 $("generate-btn").addEventListener("click", async () => {
   const text = $("spec-input").value.trim();
   if (!text) { setStatus("Please enter a theme or spec text.", "error"); return; }
 
-  setStatus("Asking Claude… (may take 15–30 s for detailed specs)", "working");
+  setStatus("Asking Claude… (may take 30–60 s for detailed specs)", "working");
   $("generate-preview").classList.add("hidden");
+  clearBuildLog();
 
   try {
     const res = await fetch("/admin/worlds/generate", {
@@ -114,12 +136,16 @@ $("generate-btn").addEventListener("click", async () => {
       body: JSON.stringify({ text }),
     });
     const data = await res.json();
+    const detail = data.detail || data;
     if (res.ok) {
       setStatus(`✓ World '${data.name}' created (${data.rooms} rooms, ${data.npcs} NPCs, ${data.items} items)`, "success");
       showPreview(data);
+      showBuildLog(data.build_log);
       loadWorlds();
     } else {
-      setStatus(`✗ ${data.detail || JSON.stringify(data)}`, "error");
+      const err = typeof detail === "object" ? (detail.error || JSON.stringify(detail)) : String(detail);
+      setStatus(`✗ ${err}`, "error");
+      showBuildLog(typeof detail === "object" ? detail.build_log : null);
     }
   } catch (e) {
     setStatus("✗ Request failed — is the server running?", "error");
@@ -164,6 +190,7 @@ $("upload-btn").addEventListener("click", async () => {
   const form = new FormData();
   form.append("file", uploadedFile);
 
+  clearBuildLog();
   try {
     const res = await fetch("/admin/worlds/upload", {
       method: "POST",
@@ -171,9 +198,11 @@ $("upload-btn").addEventListener("click", async () => {
       body: form,
     });
     const data = await res.json();
+    const detail = data.detail || data;
     if (res.ok) {
       setStatus(`✓ World '${data.name}' created from ${uploadedFile.name} (${data.rooms} rooms, ${data.npcs} NPCs, ${data.items} items)`, "success");
       showPreview(data);
+      showBuildLog(data.build_log);
       loadWorlds();
       // reset
       uploadedFile = null;
@@ -181,7 +210,9 @@ $("upload-btn").addEventListener("click", async () => {
       $("file-name").textContent = "";
       $("upload-btn").disabled = true;
     } else {
-      setStatus(`✗ ${data.detail || JSON.stringify(data)}`, "error");
+      const err = typeof detail === "object" ? (detail.error || JSON.stringify(detail)) : String(detail);
+      setStatus(`✗ ${err}`, "error");
+      showBuildLog(typeof detail === "object" ? detail.build_log : null);
     }
   } catch (e) {
     setStatus("✗ Upload failed.", "error");

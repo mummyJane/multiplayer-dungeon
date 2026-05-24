@@ -4,6 +4,20 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.6.2] - 2026-05-24 (admin build log — debug send/receive/load)
+
+### Added
+- Build log panel in admin UI: after every Generate or Upload attempt, a colour-coded log appears showing each step: `SEND` (spec length + preview), `RECV` (raw response length + preview + stop_reason), `PARSE` (JSON success or exact error position), `WRITE`, `LOAD`, `SEED`, `START`, and `WARN`/`ABORT`/`ERROR` on failures. Log is also printed to the server console via `log.info`/`log.warning`.
+
+### Changed
+- `admin/builder.py` `build_world()` now accepts a `build_log` list and appends step entries; raises with a clear message if `ANTHROPIC_API_KEY` is missing
+- `admin/routes.py` `_build_and_load()` now wraps each step (Claude call, materialise, registry create, scripts, seed) in individual try/except blocks; always returns `build_log` in the response body; on failure returns the log inside the `detail` object so the UI can still show it
+- `web/js/admin.js` `showBuildLog()` renders each log line with a colour matching its verb (green=OK, cyan=load, yellow=warn, red=error); called on both success and failure
+- `web/admin.html` — `#build-log-section` / `#build-log` panel added below the preview table
+- `web/css/admin.css` — build log pre-box styles added
+
+---
+
 ## [0.6.1] - 2026-05-24 (multi-floor building support for world builder)
 
 ### Added

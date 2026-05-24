@@ -148,9 +148,25 @@ Implement all unique schedules, rules, and progression systems mentioned in the 
 """
 
 
-async def build_world(spec_text: str) -> dict:
-    """Call Claude with a theme or spec, return parsed world dict."""
-    client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+async def build_world(spec_text: str, build_log: list) -> dict:
+    """Call Claude with a theme or spec, return parsed world dict.
+
+    build_log is a list that receives human-readable step entries so the
+    caller can surface them to the admin UI.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        build_log.append("ERROR  No ANTHROPIC_API_KEY set in .env — cannot call Claude")
+        raise ValueError("ANTHROPIC_API_KEY is not set")
+
+    preview = spec_text[:200].replace("\n", " ")
+    build_log.append(
+        f"SEND   model=claude-opus-4-7  spec={len(spec_text)} chars  "
+        f"preview: {preview!r}"
+    )
+    log.info("[builder] Sending spec to Claude (%d chars)", len(spec_text))
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
     msg = await client.messages.create(
         model="claude-opus-4-7",
         max_tokens=16384,
@@ -158,15 +174,44 @@ async def build_world(spec_text: str) -> dict:
         messages=[{"role": "user", "content": spec_text}],
     )
     raw = msg.content[0].text.strip()
+
+    build_log.append(
+        f"RECV   raw={len(raw)} chars  "
+        f"stop_reason={msg.stop_reason}  "
+        f"preview: {raw[:300].replace(chr(10), ' ')!r}"
+    )
+    log.info("[builder] Claude responded: %d chars, stop_reason=%s",
+             len(raw), msg.stop_reason)
+
     # strip markdown fences if the model added them despite instructions
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1]
-        raw = raw.rsplit("```", 1)[0]
+    stripped = raw
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[1]
+        stripped = stripped.rsplit("```", 1)[0].strip()
+        build_log.append("PARSE  Stripped markdown fences from response")
+
     try:
-        return json.loads(raw)
+        data = json.loads(stripped)
     except json.JSONDecodeError as exc:
-        log.error("Claude returned non-JSON (first 400 chars): %s", raw[:400])
-        raise ValueError("World builder returned invalid JSON") from exc
+        build_log.append(
+            f"ERROR  JSON parse failed at char {exc.pos}: {exc.msg}  "
+            f"context: {stripped[max(0,exc.pos-60):exc.pos+60]!r}"
+        )
+        log.error("[builder] JSON parse failed: %s  near: %r",
+                  exc, stripped[max(0,exc.pos-60):exc.pos+60])
+        raise ValueError(f"World builder returned invalid JSON: {exc.msg}") from exc
+
+    rooms = len(data.get("rooms", []))
+    npcs  = len(data.get("npcs",  []))
+    items = len(data.get("items", []))
+    world_id = data.get("config", {}).get("id", "?")
+    build_log.append(
+        f"PARSE  JSON OK — world_id={world_id!r}  "
+        f"rooms={rooms}  npcs={npcs}  items={items}"
+    )
+    log.info("[builder] JSON parsed: id=%s  rooms=%d  npcs=%d  items=%d",
+             world_id, rooms, npcs, items)
+    return data
 
 
 def materialise_world(data: dict) -> Path:

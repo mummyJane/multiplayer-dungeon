@@ -39,15 +39,39 @@ class WorldConfigRequest(BaseModel):
 # ── shared world-creation helper ──────────────────────────────────────────────
 
 async def _build_and_load(spec_text: str):
-    """Build from spec_text, materialise to disk, live-load, and return summary."""
+    """Build from spec_text, materialise to disk, live-load, and return summary.
+
+    Always returns a dict containing a 'build_log' list of step strings so
+    the admin UI can show exactly what happened (or went wrong).
+    Raises HTTPException with the log attached on failure.
+    """
     from admin.builder import build_world, materialise_world
     from api.state import registry
     from worlds.instance import WorldConfig
     from worlds.registry import _run_seeder
+    import traceback
 
-    data = await build_world(spec_text)
-    world_dir = materialise_world(data)
+    build_log: list[str] = []
 
+    # ── Step 1: call Claude ───────────────────────────────────────────────────
+    try:
+        data = await build_world(spec_text, build_log)
+    except Exception as exc:
+        build_log.append(f"ABORT  Claude call failed: {exc}")
+        log.exception("[admin] build_world failed")
+        raise HTTPException(500, detail={"error": str(exc), "build_log": build_log})
+
+    # ── Step 2: write files to disk ───────────────────────────────────────────
+    try:
+        world_dir = materialise_world(data)
+        build_log.append(f"WRITE  World files written to {world_dir}")
+        log.info("[admin] materialise_world → %s", world_dir)
+    except Exception as exc:
+        build_log.append(f"ABORT  materialise_world failed: {exc}")
+        log.exception("[admin] materialise_world failed")
+        raise HTTPException(500, detail={"error": str(exc), "build_log": build_log})
+
+    # ── Step 3: live-load into registry ──────────────────────────────────────
     cfg_data = data["config"]
     config = WorldConfig(
         id=cfg_data["id"],
@@ -56,21 +80,51 @@ async def _build_and_load(spec_text: str):
         max_players=cfg_data.get("max_players", 50),
         ollama_model=cfg_data.get("ollama_model", "llama3"),
     )
-    world = registry.create(config)
-    world.scripts.load(world_dir / "scripts")
-    if (world_dir / "seed.py").exists():
-        _run_seeder(world_dir / "seed.py", world)
+    try:
+        world = registry.create(config)
+        build_log.append(f"LOAD   World '{config.id}' registered in memory")
+    except ValueError as exc:
+        build_log.append(f"ABORT  Registry error: {exc}")
+        raise HTTPException(409, detail={"error": str(exc), "build_log": build_log})
+
+    # ── Step 4: load scripts ──────────────────────────────────────────────────
+    try:
+        world.scripts.load(world_dir / "scripts")
+        build_log.append(f"LOAD   Scripts loaded from {world_dir / 'scripts'}")
+    except Exception as exc:
+        build_log.append(f"WARN   Script load error (world still created): {exc}")
+        log.warning("[admin] script load error: %s", exc)
+
+    # ── Step 5: run seeder ────────────────────────────────────────────────────
+    seed_path = world_dir / "seed.py"
+    if seed_path.exists():
+        try:
+            _run_seeder(seed_path, world)
+            rooms_seeded = len(world.map._rooms)
+            npcs_seeded  = len(world.npcs)
+            build_log.append(
+                f"SEED   seed.py ran OK — "
+                f"{rooms_seeded} rooms, {npcs_seeded} NPCs in world"
+            )
+        except Exception as exc:
+            tb = traceback.format_exc()
+            build_log.append(f"WARN   seed.py error (world still running): {exc}")
+            build_log.append(f"       {tb.splitlines()[-1]}")
+            log.warning("[admin] seed.py error:\n%s", tb)
+
     world.start_loop()
+    build_log.append("START  Game loop started")
 
     rooms  = len(data.get("rooms", []))
     npcs   = len(data.get("npcs", []))
     items  = len(data.get("items", []))
     return {
         "world_id": config.id,
-        "name": config.name,
-        "rooms": rooms,
-        "npcs": npcs,
-        "items": items,
+        "name":     config.name,
+        "rooms":    rooms,
+        "npcs":     npcs,
+        "items":    items,
+        "build_log": build_log,
     }
 
 

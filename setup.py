@@ -138,9 +138,40 @@ def create_env():
 
 def create_data_dirs():
     hdr("5. Data directories")
-    for d in [ROOT / "data" / "worlds", ROOT / "logs"]:
+    for d in [ROOT / "data" / "worlds", ROOT / "data" / "players",
+              ROOT / "logs", ROOT / "backups" / "worlds", ROOT / "backups" / "players"]:
         d.mkdir(parents=True, exist_ok=True)
-    ok("data/worlds/ and logs/ ready")
+    ok("data/worlds/, data/players/, logs/, backups/ ready")
+    _init_data_repos()
+
+
+def _init_data_repos():
+    """Initialise local git repos inside data/worlds/ and data/players/."""
+    import subprocess as sp
+    for label, path in [("worlds", ROOT / "data" / "worlds"),
+                        ("players", ROOT / "data" / "players")]:
+        git_dir = path / ".git"
+        if git_dir.exists():
+            ok(f"data/{label}/ git repo already initialised")
+            continue
+        info(f"Initialising local git repo for data/{label}/ …")
+        for cmd in [
+            f'git -C "{path}" init',
+            f'git -C "{path}" config user.name "dungeon-data"',
+            f'git -C "{path}" config user.email "dungeon@localhost"',
+        ]:
+            r = sp.run(cmd, shell=True, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+            if r.returncode != 0:
+                warn(f"git command failed: {cmd}\n{r.stderr[:300]}")
+                break
+        else:
+            # create initial commit
+            (path / ".gitkeep").touch()
+            sp.run(f'git -C "{path}" add .gitkeep', shell=True)
+            sp.run(f'git -C "{path}" commit -m "init data repo"', shell=True,
+                   capture_output=True, text=True, encoding="utf-8", errors="replace")
+            ok(f"data/{label}/ git repo initialised")
 
 
 def check_ollama():

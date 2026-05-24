@@ -1,13 +1,16 @@
 from __future__ import annotations
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from pathlib import Path
+
+from auth.accounts import AccountManager
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
 _WEB_DIR = Path(__file__).parent.parent / "web"
+_accounts = AccountManager()
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -52,12 +55,48 @@ async def ws_endpoint(ws: WebSocket, world_id: str):
     session_id = sessions.new_session_id()
     await sessions.connect(session_id, ws)
 
-    try:
-        await sessions.send(session_id, {"type": "prompt", "text": "Enter your name:"})
-        data = await ws.receive_json()
-        player_name = str(data.get("text", "")).strip()[:24] or "Wanderer"
+    username = ""
+    player_name = ""
 
-        player = world.join(session_id, player_name)
+    try:
+        # ── auth handshake ────────────────────────────────────────────────────
+        await sessions.send(session_id, {"type": "auth_prompt"})
+
+        data = await ws.receive_json()
+        action   = str(data.get("action", "")).strip()   # "login" | "register" | "guest"
+        uname    = str(data.get("username", "")).strip()[:32].lower()
+        password = str(data.get("password", "")).strip()
+
+        if action == "register":
+            ok, err = _accounts.register(uname, password)
+            if not ok:
+                await sessions.send(session_id, {"type": "auth_error", "text": err})
+                return
+            username = uname
+            await sessions.send(session_id, {"type": "auth_ok", "text": "Account created!"})
+
+        elif action == "login":
+            ok, err = _accounts.login(uname, password)
+            if not ok:
+                await sessions.send(session_id, {"type": "auth_error", "text": err})
+                return
+            username = uname
+            await sessions.send(session_id, {"type": "auth_ok", "text": f"Welcome back, {uname}!"})
+
+        else:
+            # guest — no account required
+            await sessions.send(session_id, {"type": "auth_ok", "text": "Joining as guest."})
+
+        # ── name prompt ───────────────────────────────────────────────────────
+        display_name = username or ""
+        if not display_name:
+            await sessions.send(session_id, {"type": "prompt", "text": "Enter your name:"})
+            data = await ws.receive_json()
+            display_name = str(data.get("text", "")).strip()[:24] or "Wanderer"
+        player_name = display_name
+
+        # ── join world ────────────────────────────────────────────────────────
+        player = world.join(session_id, player_name, username=username)
 
         await sessions.send(session_id, {
             "type": "welcome",
@@ -67,10 +106,10 @@ async def ws_endpoint(ws: WebSocket, world_id: str):
         })
         await world.send_room_view(session_id, player)
 
-        # fire player_enter rule
         room = world.map.get_room(player.room_id)
         await world.scripts.fire_rule("player_enter", player=player, room=room, world=world)
 
+        # ── main game loop ────────────────────────────────────────────────────
         while True:
             data = await ws.receive_json()
             text = str(data.get("text", "")).strip()

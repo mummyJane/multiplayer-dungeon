@@ -4,6 +4,26 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.6.0] - 2026-05-24 (player accounts, data repos, backups)
+
+### Added
+- `auth/accounts.py` — `AccountManager`: register/login with PBKDF2-HMAC-SHA256 password hashing (stdlib only, no extra deps). Accounts stored as JSON in `data/players/<username>/account.json`. `save_world_state` / `load_world_state` persists per-world player position, hp, inventory, and flags
+- `storage/repo.py` — `DataRepo`: thin wrapper around a local git repo. `init()` creates repo + initial commit; `commit_all(msg)` stages everything and commits; `tag(name, msg)` creates annotated tags. Used for `data/worlds/` and `data/players/` — never pushed to GitHub
+- `storage/backup.py` — `BackupManager`: `backup_world(id)` / `backup_player(username)` / `backup_all_*()` create timestamped zip archives under `backups/worlds/` and `backups/players/`
+- Frontend login/register/guest overlay — three-tab auth screen appears after world selection; accounts restore previous position and state; guests play without an account
+
+### Changed
+- `entities/player.py` — added `username: str`, `flags: dict`, `to_state()` serialiser, `from_state()` class method for save/restore
+- `worlds/instance.py` — `join(session_id, name, username="")` now accepts an account username; restores saved world state on join; `leave()` persists state for logged-in players
+- `worlds/registry.py` — `save_config()` and `remove()` now commit+tag the worlds data repo after each world create/delete
+- `api/routes.py` — WebSocket handshake now has an auth step (`auth_prompt` → login/register/guest → `auth_ok`/`auth_error`) before the name prompt
+- `web/index.html` + `web/js/main.js` — auth overlay with Login/Register/Guest tabs; JS handles `auth_prompt`, `auth_ok`, `auth_error` messages
+- `web/css/style.css` — tab bar + auth tab styles added
+- `.gitignore` — `data/`, `backups/`, `logs/`, `.server.pid`, `.restart.flag`, `.stop.flag`, `.claude/` all excluded from main repo
+- `setup.py` — `create_data_dirs()` now also creates `data/players/` and `backups/`; `_init_data_repos()` initialises git repos inside `data/worlds/` and `data/players/`
+
+---
+
 ## [0.5.3] - 2026-05-24 (fix: world delete now removes files from disk)
 
 ### Fixed

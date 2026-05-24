@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 
 let ws = null;
 let selectedWorld = null;
+let pendingAuth = null;   // { action, username, password } — set before WS opens
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,16 @@ function updateRoom(data) {
   if (data.npcs?.length)      parts.push("NPCs: " + data.npcs.join(", "));
   if (data.monsters?.length)  parts.push("Enemies: " + data.monsters.join(", "));
   $("people-bar").innerHTML = parts.map(p => `<span>${p}</span>`).join("&ensp;·&ensp;");
+}
+
+function showAuthError(msg) {
+  const el = $("auth-error");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+function clearAuthError() {
+  $("auth-error").classList.add("hidden");
 }
 
 // ── world list ───────────────────────────────────────────────────────────────
@@ -59,21 +70,74 @@ async function loadWorlds() {
 
 function pickWorld(w) {
   selectedWorld = w;
-  $("name-world-title").textContent = w.name;
+  $("auth-world-title").textContent = w.name;
   $("world-overlay").classList.add("hidden");
-  $("name-overlay").classList.remove("hidden");
-  $("name-input").focus();
+  $("auth-overlay").classList.remove("hidden");
+  clearAuthError();
+  $("login-user").focus();
 }
 
-$("back-btn").addEventListener("click", () => {
-  $("name-overlay").classList.add("hidden");
+// ── auth tab switching ────────────────────────────────────────────────────────
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".auth-tab").forEach(t => t.classList.add("hidden"));
+    btn.classList.add("active");
+    $("tab-" + btn.dataset.tab).classList.remove("hidden");
+    clearAuthError();
+  });
+});
+
+$("auth-back-btn").addEventListener("click", () => {
+  $("auth-overlay").classList.add("hidden");
   $("world-overlay").classList.remove("hidden");
   selectedWorld = null;
 });
 
+// ── auth actions ──────────────────────────────────────────────────────────────
+
+$("login-btn").addEventListener("click", () => {
+  const u = $("login-user").value.trim();
+  const p = $("login-pass").value;
+  if (!u || !p) { showAuthError("Enter username and password."); return; }
+  pendingAuth = { action: "login", username: u, password: p };
+  openWS();
+});
+
+$("reg-btn").addEventListener("click", () => {
+  const u = $("reg-user").value.trim();
+  const p = $("reg-pass").value;
+  if (!u || !p) { showAuthError("Enter username and password."); return; }
+  pendingAuth = { action: "register", username: u, password: p };
+  openWS();
+});
+
+$("guest-btn").addEventListener("click", () => {
+  const name = $("guest-name").value.trim();
+  if (!name) { showAuthError("Enter a display name."); return; }
+  pendingAuth = { action: "guest", username: "", password: "", guestName: name };
+  openWS();
+});
+
+// Enter key shortcuts
+$("login-pass").addEventListener("keydown", e => { if (e.key === "Enter") $("login-btn").click(); });
+$("reg-pass").addEventListener("keydown",   e => { if (e.key === "Enter") $("reg-btn").click(); });
+$("guest-name").addEventListener("keydown", e => { if (e.key === "Enter") $("guest-btn").click(); });
+
+// ── back button (name overlay) ────────────────────────────────────────────────
+
+$("back-btn").addEventListener("click", () => {
+  $("name-overlay").classList.add("hidden");
+  $("auth-overlay").classList.remove("hidden");
+  selectedWorld = null;
+  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+});
+
 // ── WebSocket ────────────────────────────────────────────────────────────────
 
-function connect(playerName) {
+function openWS() {
+  if (!selectedWorld || !pendingAuth) return;
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${proto}://${location.host}/ws/${selectedWorld.id}`);
 
@@ -82,20 +146,56 @@ function connect(playerName) {
   ws.onmessage = evt => {
     const msg = JSON.parse(evt.data);
     switch (msg.type) {
-      case "prompt":
-        ws.send(JSON.stringify({ text: playerName }));
+
+      case "auth_prompt":
+        ws.send(JSON.stringify({
+          action:   pendingAuth.action,
+          username: pendingAuth.username,
+          password: pendingAuth.password,
+        }));
         break;
+
+      case "auth_ok":
+        clearAuthError();
+        $("auth-overlay").classList.add("hidden");
+        if (pendingAuth.action === "guest") {
+          // guest already provided a name — send directly when prompted
+        }
+        break;
+
+      case "auth_error":
+        showAuthError(msg.text);
+        ws.onclose = null;
+        ws.close();
+        ws = null;
+        break;
+
+      case "prompt":
+        if (pendingAuth.action === "guest") {
+          ws.send(JSON.stringify({ text: pendingAuth.guestName }));
+        } else {
+          // logged-in users don't need the name prompt; server uses their username
+          // but just in case:
+          ws.send(JSON.stringify({ text: pendingAuth.username }));
+        }
+        break;
+
       case "welcome":
         $("world-tag").textContent = msg.world;
         addMessage(`Welcome to ${msg.world}, ${msg.name}!`, "system");
         $("name-overlay").classList.add("hidden");
+        $("auth-overlay").classList.add("hidden");
+        pendingAuth = null;
         break;
+
       case "room":
         updateRoom(msg);
         break;
+
       case "message":
         addMessage(msg.text);
         break;
+
       default:
         console.warn("Unknown msg type:", msg.type);
     }
@@ -104,8 +204,11 @@ function connect(playerName) {
   ws.onclose = () => {
     addMessage("Disconnected.", "system");
     selectedWorld = null;
+    pendingAuth = null;
     loadWorlds();
     $("world-overlay").classList.remove("hidden");
+    $("auth-overlay").classList.add("hidden");
+    $("name-overlay").classList.add("hidden");
   };
 
   ws.onerror = () => addMessage("Connection error.", "system");
@@ -122,15 +225,8 @@ function sendCommand() {
 
 // ── event wiring ─────────────────────────────────────────────────────────────
 
-$("name-btn").addEventListener("click", () => {
-  const name = $("name-input").value.trim();
-  if (!name || !selectedWorld) return;
-  connect(name);
-});
-
-$("name-input").addEventListener("keydown", e => { if (e.key === "Enter") $("name-btn").click(); });
 $("cmd-send").addEventListener("click", sendCommand);
 $("cmd-input").addEventListener("keydown", e => { if (e.key === "Enter") sendCommand(); });
 
-// ── init ──────────────────────────────────────────────────────────────────────
+// ── init ─────────────────────────────────────────────────────────────────────
 loadWorlds();

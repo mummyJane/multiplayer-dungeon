@@ -95,6 +95,14 @@ input:focus, textarea:focus { border-color: var(--accent); }
 .error  { color: var(--error); font-size: 13px; }
 .hidden { display: none !important; }
 
+/* ── auth overlay ── */
+.tab-bar { display: flex; gap: .25rem; }
+.tab-btn { flex: 1; }
+.tab-btn.active { border-color: var(--accent); color: var(--accent); }
+
+.auth-tab { display: flex; flex-direction: column; gap: .6rem; }
+.auth-tab.hidden { display: none !important; }
+
 /* ── admin layout ── */
 #admin-app { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
 #admin-app header { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }

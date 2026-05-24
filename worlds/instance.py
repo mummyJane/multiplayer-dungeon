@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 import logging
 from dataclasses import dataclass, field
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 from world.map import WorldMap
 from entities.player import Player
@@ -15,9 +15,8 @@ from engine.loop import GameLoop
 from gm.interpreter import GMInterpreter
 from scripting.context import ScriptContext
 from debug.player_log import PlayerDebugLogger, is_enabled as debug_enabled
-
-if TYPE_CHECKING:
-    pass
+from auth.accounts import AccountManager
+from storage.backup import BackupManager
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +29,9 @@ class WorldConfig:
     max_players: int = 50
     ollama_model: str = "llama3"
     flags: set = field(default_factory=set)
+
+
+_accounts = AccountManager()
 
 
 class WorldInstance:
@@ -68,27 +70,37 @@ class WorldInstance:
 
     # ── player lifecycle ──────────────────────────────────────────────────────
 
-    def join(self, session_id: str, player_name: str) -> Player:
+    def join(self, session_id: str, player_name: str, username: str = "") -> Player:
         player_id  = str(uuid.uuid4())
         start_room = self.map.default_entry_room()
-        player = Player(id=player_id, name=player_name, room_id=start_room)
+        player = Player(id=player_id, name=player_name, room_id=start_room,
+                        username=username)
         player.session_id = session_id
-        self.players[player_id] = player
 
-        room = self.map.get_room(start_room)
+        # restore saved state from account if available
+        if username:
+            saved = _accounts.load_world_state(username, self.id)
+            if saved:
+                from entities.player import Player as P
+                P.from_state(saved, player)
+                # ensure restored room actually exists
+                if not self.map.get_room(player.room_id):
+                    player.room_id = start_room
+
+        self.players[player_id] = player
+        room = self.map.get_room(player.room_id)
         if room:
             room.add_entity(player_id)
         self.sessions.bind_player(session_id, player_id)
         self._loop.set_player_count(len(self.players))
 
-        # create debug logger if enabled
         if debug_enabled():
             dbg = PlayerDebugLogger(self.config.id, player_id, player_name)
-            dbg.join(start_room)
+            dbg.join(player.room_id)
             self._debug_loggers[player_id] = dbg
 
-        player.add_history("event", f"Entered {self.name} at {room.name if room else start_room}")
-        log.info("[%s] Player joined: %s", self.id, player_name)
+        player.add_history("event", f"Entered {self.name} at {room.name if room else player.room_id}")
+        log.info("[%s] Player joined: %s (account: %s)", self.id, player_name, username or "guest")
         return player
 
     def leave(self, session_id: str):
@@ -100,7 +112,11 @@ class WorldInstance:
                 room.remove_entity(player_id)
             self._loop.set_player_count(len(self.players))
 
-            # close debug logger
+            # persist state for logged-in accounts
+            if player.username:
+                _accounts.save_world_state(player.username, self.id, player.to_state())
+                log.debug("[%s] Saved state for %s", self.id, player.username)
+
             dbg = self._debug_loggers.pop(player_id, None)
             if dbg:
                 dbg.close()

@@ -6,10 +6,20 @@ from pathlib import Path
 from typing import Optional
 
 from .instance import WorldInstance, WorldConfig
+from storage.repo import DataRepo
 
 log = logging.getLogger(__name__)
 
 _DATA_ROOT = Path(__file__).parent.parent / "data" / "worlds"
+_worlds_repo: Optional[DataRepo] = None
+
+
+def _get_worlds_repo() -> DataRepo:
+    global _worlds_repo
+    if _worlds_repo is None:
+        _worlds_repo = DataRepo(_DATA_ROOT)
+        _worlds_repo.init()
+    return _worlds_repo
 
 
 class WorldRegistry:
@@ -26,6 +36,17 @@ class WorldRegistry:
         log.info("World created: %s (%s)", config.name, config.id)
         return world
 
+    def _commit_and_tag_world(self, world_id: str, action: str):
+        """Commit worlds data repo and tag after a world is created or deleted."""
+        try:
+            repo = _get_worlds_repo()
+            repo.commit_all(f"{action} world: {world_id}")
+            tag_name = f"world-{action}-{world_id}"
+            if not repo.tag_exists(tag_name):
+                repo.tag(tag_name, f"World {action}: {world_id}")
+        except Exception:
+            log.exception("Failed to commit worlds repo after %s %s", action, world_id)
+
     def get(self, world_id: str) -> Optional[WorldInstance]:
         return self._worlds.get(world_id)
 
@@ -37,12 +58,12 @@ class WorldRegistry:
         if world:
             world._loop.stop()
 
-        # delete from disk so it doesn't reload on restart
         world_dir = _DATA_ROOT / world_id
         if world_dir.exists():
             import shutil
             shutil.rmtree(world_dir)
             log.info("World deleted from disk: %s", world_dir)
+            self._commit_and_tag_world(world_id, "deleted")
 
         if world:
             log.info("World removed: %s", world_id)
@@ -92,6 +113,7 @@ class WorldRegistry:
         (world_dir / "config.json").write_text(
             json.dumps(cfg, indent=2), encoding="utf-8"
         )
+        self._commit_and_tag_world(world.id, "created")
 
 
 def _run_seeder(path: Path, world: WorldInstance):

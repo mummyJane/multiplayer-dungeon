@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 env/
+.history/
 *.egg-info/
 dist/
 build/
@@ -15,8 +16,18 @@ build/
 node_modules/
 .DS_Store
 Thumbs.db
+
+# server runtime files
 logs/
-.claude/
 .server.pid
 .restart.flag
 .stop.flag
+
+# player and world data (stored in their own local repos)
+data/
+
+# backups (local only, never pushed)
+backups/
+
+# Claude Code session data
+.claude/

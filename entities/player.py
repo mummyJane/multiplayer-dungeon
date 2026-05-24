@@ -19,11 +19,33 @@ class Player:
     id: str
     name: str
     room_id: str
+    username: str = ""        # linked account username (empty = guest)
     hp: int = 100
     max_hp: int = 100
     inventory: list[str] = field(default_factory=list)
+    flags: dict = field(default_factory=dict)
     session_id: Optional[str] = None
     history: list[HistoryEntry] = field(default_factory=list)
+
+    def to_state(self) -> dict:
+        """Serialisable snapshot for account persistence."""
+        return {
+            "room_id": self.room_id,
+            "hp": self.hp,
+            "max_hp": self.max_hp,
+            "inventory": list(self.inventory),
+            "flags": dict(self.flags),
+        }
+
+    @staticmethod
+    def from_state(state: dict, player: "Player") -> "Player":
+        """Apply a saved state dict onto an existing player object."""
+        player.room_id = state.get("room_id", player.room_id)
+        player.hp = state.get("hp", player.hp)
+        player.max_hp = state.get("max_hp", player.max_hp)
+        player.inventory = list(state.get("inventory", player.inventory))
+        player.flags = dict(state.get("flags", player.flags))
+        return player
 
     # ── history ───────────────────────────────────────────────────────────────
 

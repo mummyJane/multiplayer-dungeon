@@ -34,7 +34,39 @@
       </div>
     </div>
 
-    <!-- Name entry overlay -->
+    <!-- Auth overlay (login / register / guest) -->
+    <div id="auth-overlay" class="overlay hidden">
+      <div class="overlay-box">
+        <h1 id="auth-world-title"></h1>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="login">Login</button>
+          <button class="tab-btn" data-tab="register">Register</button>
+          <button class="tab-btn" data-tab="guest">Guest</button>
+        </div>
+
+        <div id="tab-login" class="auth-tab">
+          <input id="login-user" type="text" maxlength="32" placeholder="Username" autocomplete="username">
+          <input id="login-pass" type="password" maxlength="64" placeholder="Password" autocomplete="current-password">
+          <button id="login-btn">Login</button>
+        </div>
+
+        <div id="tab-register" class="auth-tab hidden">
+          <input id="reg-user" type="text" maxlength="32" placeholder="Username" autocomplete="username">
+          <input id="reg-pass" type="password" maxlength="64" placeholder="Password (min 4 chars)" autocomplete="new-password">
+          <button id="reg-btn">Create Account</button>
+        </div>
+
+        <div id="tab-guest" class="auth-tab hidden">
+          <input id="guest-name" type="text" maxlength="24" placeholder="Display name…" autocomplete="off">
+          <button id="guest-btn">Play as Guest</button>
+        </div>
+
+        <p id="auth-error" class="error hidden"></p>
+        <button id="auth-back-btn" class="muted">← Back to worlds</button>
+      </div>
+    </div>
+
+    <!-- Name entry overlay (logged-in users skip this) -->
     <div id="name-overlay" class="overlay hidden">
       <div class="overlay-box">
         <h1 id="name-world-title"></h1>

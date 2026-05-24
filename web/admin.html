@@ -37,6 +37,8 @@
         <button class="etab active" data-etab="overview">Overview</button>
         <button class="etab" data-etab="rooms">Rooms</button>
         <button class="etab" data-etab="npcs">NPCs</button>
+        <button class="etab" data-etab="items">Items</button>
+        <button class="etab" data-etab="players">Players</button>
         <button class="etab" data-etab="scripts">Scripts</button>
       </div>
 
@@ -78,6 +80,34 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- items tab -->
+      <div class="etab-panel hidden" id="etab-items">
+        <p class="muted" id="ed-items-count"></p>
+        <div class="scroll-table">
+          <table id="ed-items-table">
+            <thead><tr>
+              <th>ID</th><th>Name</th><th>Type</th><th>Room</th><th>Properties</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- players tab -->
+      <div class="etab-panel hidden" id="etab-players">
+        <p class="muted" id="ed-players-count"></p>
+        <div class="scroll-table">
+          <table id="ed-players-table">
+            <thead><tr>
+              <th>Name</th><th>Account</th><th>Room</th>
+              <th>HP</th><th>Worn</th><th>Effects</th><th>Flags</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <button id="ed-refresh-players" style="margin-top:.5rem">Refresh</button>
       </div>
 
       <!-- scripts tab -->

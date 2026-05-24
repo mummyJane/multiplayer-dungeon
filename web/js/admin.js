@@ -233,6 +233,7 @@ document.querySelectorAll(".etab").forEach(btn => {
     document.querySelectorAll(".etab-panel").forEach(p => p.classList.add("hidden"));
     btn.classList.add("active");
     $("etab-" + btn.dataset.etab).classList.remove("hidden");
+    if (btn.dataset.etab === "players" && editorWorldId) loadPlayers(editorWorldId);
   });
 });
 
@@ -273,6 +274,9 @@ async function openWorldEditor(worldId) {
   document.querySelector(".etab[data-etab='overview']").classList.add("active");
   $("etab-overview").classList.remove("hidden");
 
+  // wire refresh button for players tab
+  $("ed-refresh-players").onclick = () => loadPlayers(editorWorldId);
+
   // load detail + scripts in parallel
   const [detailRes, scriptsRes] = await Promise.all([
     fetch(`/admin/worlds/${worldId}/detail`, { headers: authHeaders() }),
@@ -292,14 +296,17 @@ async function openWorldEditor(worldId) {
   $("ed-model").value      = detail.config.ollama_model;
   $("ed-maxplayers").value = detail.config.max_players;
 
+  const gmBadge = '<span class="gm-badge">ai</span>';
+
   // populate rooms table
   $("ed-rooms-count").textContent = `${detail.rooms.length} rooms`;
   $("ed-rooms-table").querySelector("tbody").innerHTML = detail.rooms.map(r => {
     const exits = Object.entries(r.exits).map(([d,t]) => `${d}→${t}`).join(", ") || "—";
     const rtype = r.properties?.room_type || "—";
+    const gm    = r.gm_generated ? gmBadge : "";
     return `<tr>
       <td class="mono">${r.id}</td>
-      <td>${r.name}</td>
+      <td>${r.name}${gm}</td>
       <td class="center">${r.z}</td>
       <td class="muted">${r.zone_id}</td>
       <td class="muted">${rtype}</td>
@@ -314,13 +321,29 @@ async function openWorldEditor(worldId) {
     const shift = n.properties?.shift
       ? `${n.properties.shift} ${n.properties.shift_start||""}–${n.properties.shift_end||""}`
       : "—";
+    const gm    = n.gm_generated ? gmBadge : "";
     return `<tr>
       <td class="mono">${n.id}</td>
-      <td>${n.name}</td>
+      <td>${n.name}${gm}</td>
       <td class="muted small">${n.description}</td>
       <td class="mono muted">${n.room_id}</td>
       <td class="muted">${role}</td>
       <td class="muted">${shift}</td>
+    </tr>`;
+  }).join("");
+
+  // populate items table
+  $("ed-items-count").textContent = `${detail.items.length} items`;
+  $("ed-items-table").querySelector("tbody").innerHTML = detail.items.map(i => {
+    const gm    = i.gm_generated ? gmBadge : "";
+    const props = Object.entries(i.properties || {})
+      .map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(", ") || "—";
+    return `<tr>
+      <td class="mono">${i.id}</td>
+      <td>${i.name}${gm}</td>
+      <td class="muted">${i.item_type}</td>
+      <td class="mono muted">${i.room_id}</td>
+      <td class="muted small">${props}</td>
     </tr>`;
   }).join("");
 
@@ -332,6 +355,36 @@ async function openWorldEditor(worldId) {
   $("script-editor").value = editorScripts.rules;
 
   $("world-editor").scrollIntoView({ behavior: "smooth" });
+}
+
+async function loadPlayers(worldId) {
+  const res = await fetch(`/admin/worlds/${worldId}/players`, { headers: authHeaders() });
+  if (!res.ok) return;
+  const players = await res.json();
+  const count = $("ed-players-count");
+  const tbody = $("ed-players-table").querySelector("tbody");
+  count.textContent = `${players.length} active player${players.length !== 1 ? "s" : ""}`;
+  if (!players.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="muted">No players online.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = players.map(p => {
+    const worn  = Object.entries(p.worn || {}).map(([s, n]) => `${s}: ${n}`).join(", ") || "—";
+    const efx   = (p.effects || []).join(", ") || "—";
+    const flags = Object.entries(p.flags || {})
+      .filter(([, v]) => v !== false && v !== null && v !== 0 && v !== "" && !(Array.isArray(v) && !v.length))
+      .map(([k, v]) => v === true ? k : `${k}:${v}`)
+      .join(", ") || "—";
+    return `<tr>
+      <td><strong>${p.name}</strong></td>
+      <td class="muted">${p.username}</td>
+      <td class="mono muted">${p.room_name}</td>
+      <td>${p.hp}/${p.max_hp}</td>
+      <td class="small muted">${worn}</td>
+      <td class="small muted">${efx}</td>
+      <td class="small muted">${flags}</td>
+    </tr>`;
+  }).join("");
 }
 
 $("ed-close").addEventListener("click", () => {

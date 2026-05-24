@@ -73,6 +73,29 @@ class WorldInstance:
             if player.room_id == room_id and player.session_id:
                 await self.sessions.send(player.session_id, {"type": "message", "text": text})
 
+    async def send_status(self, session_id: str, player: Player):
+        """Send a status update (dashbook) to a single player's session."""
+        room = self.map.get_room(player.room_id)
+        room_name = room.name if room else player.room_id
+        inv_names = [self.items[i].name for i in player.inventory if i in self.items]
+        worn_names = {slot: self.items[i].name
+                      for slot, i in player.worn.items() if i in self.items}
+        effects = sorted(player.worn_effects(self.items))
+        active_flags = {k: v for k, v in player.flags.items()
+                        if v not in (False, None, 0, "", [])}
+        await self.sessions.send(session_id, {
+            "type": "status",
+            "name": player.name,
+            "username": player.username,
+            "hp": player.hp,
+            "max_hp": player.max_hp,
+            "room_name": room_name,
+            "inventory": inv_names,
+            "worn": worn_names,
+            "effects": effects,
+            "flags": active_flags,
+        })
+
     # ── debug logger access ───────────────────────────────────────────────────
 
     def get_debug_logger(self, player_id: str) -> Optional[PlayerDebugLogger]:
@@ -140,9 +163,10 @@ class WorldInstance:
         room = self.map.get_room(player.room_id)
         if room is None:
             return
-        others   = [self.players[e].name   for e in room.entity_ids if e in self.players   and e != player.id]
-        npcs     = [self.npcs[e].name      for e in room.entity_ids if e in self.npcs]
-        monsters = [self.monsters[e].name  for e in room.entity_ids if e in self.monsters]
+        others     = [self.players[e].name  for e in room.entity_ids if e in self.players  and e != player.id]
+        npcs       = [self.npcs[e].name     for e in room.entity_ids if e in self.npcs]
+        monsters   = [self.monsters[e].name for e in room.entity_ids if e in self.monsters]
+        items_here = [self.items[e].name    for e in room.entity_ids if e in self.items]
         await self.sessions.send(session_id, {
             "type": "room",
             "name": room.name,
@@ -151,6 +175,7 @@ class WorldInstance:
             "players": others,
             "npcs": npcs,
             "monsters": monsters,
+            "items": items_here,
         })
 
     # ── loop ──────────────────────────────────────────────────────────────────

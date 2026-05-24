@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+import random
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pathlib import Path
@@ -105,9 +106,49 @@ async def ws_endpoint(ws: WebSocket, world_id: str):
             "world": world.name,
         })
         await world.send_room_view(session_id, player)
+        await world.send_status(session_id, player)
 
+        initial_room_id = player.room_id
         room = world.map.get_room(player.room_id)
         await world.scripts.fire_rule("player_enter", player=player, room=room, world=world)
+
+        # ── sync entity IDs if script teleported the player ───────────────────
+        if player.room_id != initial_room_id:
+            old_room = world.map.get_room(initial_room_id)
+            if old_room:
+                old_room.remove_entity(player.id)
+            new_room = world.map.get_room(player.room_id)
+            if new_room and player.id not in new_room.entity_ids:
+                new_room.add_entity(player.id)
+
+        # ── update client to reflect any script-side room/flag changes ────────
+        await world.send_room_view(session_id, player)
+        await world.send_status(session_id, player)
+
+        # ── no-start-condition fallback ───────────────────────────────────────
+        if not world.scripts._rules.get("player_enter"):
+            log.warning("[%s] No player_enter handlers — %s placed in random room", world_id, player_name)
+            room_ids = list(world.map._rooms.keys())
+            if room_ids:
+                new_room_id = random.choice(room_ids)
+                if new_room_id != player.room_id:
+                    old_room = world.map.get_room(player.room_id)
+                    if old_room:
+                        old_room.remove_entity(player.id)
+                    player.room_id = new_room_id
+                    new_room = world.map.get_room(new_room_id)
+                    if new_room:
+                        new_room.add_entity(player.id)
+            await sessions.send(session_id, {
+                "type": "message",
+                "text": "[ No start condition defined for this world. ]",
+            })
+            await world.send_room_view(session_id, player)
+            await world.send_status(session_id, player)
+
+        # ── auto-look: print room description as text on arrival ─────────────
+        look_text = await world.gm._look(player, world)
+        await sessions.send(session_id, {"type": "message", "text": look_text})
 
         # ── main game loop ────────────────────────────────────────────────────
         while True:
@@ -115,9 +156,14 @@ async def ws_endpoint(ws: WebSocket, world_id: str):
             text = str(data.get("text", "")).strip()
             if not text:
                 continue
-            response = await world.gm.handle(player, text, world)
+            try:
+                response = await world.gm.handle(player, text, world)
+            except Exception as exc:
+                log.exception("[%s] handle() error for %s: %s", world_id, player_name, exc)
+                response = "Something went wrong. (server error)"
             await sessions.send(session_id, {"type": "message", "text": response})
             await world.send_room_view(session_id, player)
+            await world.send_status(session_id, player)
 
     except WebSocketDisconnect:
         pass

@@ -78,8 +78,10 @@ async def _build_and_load(spec_text: str):
 
     # ── Step 2: write files to disk ───────────────────────────────────────────
     try:
-        world_dir = materialise_world(data)
+        world_dir, script_errors = materialise_world(data)
         build_log.append(f"WRITE  World files written to {world_dir}")
+        for se in script_errors:
+            build_log.append(f"WARN   Script skipped (syntax error): {se}")
         log.info("[admin] materialise_world → %s", world_dir)
     except Exception as exc:
         build_log.append(f"ABORT  materialise_world failed: {exc}")
@@ -241,28 +243,37 @@ async def world_detail(world_id: str, _=Depends(_require_admin)):
 
     rooms = [
         {
-            "id":          r.id,
-            "name":        r.name,
-            "description": r.description[:120] + ("…" if len(r.description) > 120 else ""),
-            "zone_id":     r.zone_id,
+            "id":           r.id,
+            "name":         r.name,
+            "description":  r.description[:120] + ("…" if len(r.description) > 120 else ""),
+            "zone_id":      r.zone_id,
             "x": r.x, "y": r.y, "z": r.z,
-            "exits":       r.exits,
-            "properties":  r.properties,
+            "exits":        r.exits,
+            "properties":   r.properties,
+            "gm_generated": r.gm_generated,
         }
         for r in sorted(world.map._rooms.values(), key=lambda r: (r.z, r.y, r.x))
     ]
     npcs = [
         {
-            "id":          n.id,
-            "name":        n.name,
-            "description": n.description,
-            "room_id":     n.room_id,
-            "properties":  n.properties,
+            "id":           n.id,
+            "name":         n.name,
+            "description":  n.description,
+            "room_id":      n.room_id,
+            "properties":   n.properties,
+            "gm_generated": n.gm_generated,
         }
         for n in sorted(world.npcs.values(), key=lambda n: n.name)
     ]
     items = [
-        {"id": i.id, "name": i.name, "item_type": i.item_type, "room_id": i.room_id}
+        {
+            "id":           i.id,
+            "name":         i.name,
+            "item_type":    i.item_type,
+            "room_id":      i.room_id or "—",
+            "properties":   i.properties,
+            "gm_generated": i.gm_generated,
+        }
         for i in sorted(world.items.values(), key=lambda i: i.name)
     ]
     return {
@@ -326,6 +337,38 @@ async def save_scripts(world_id: str, req: ScriptsSave, _=Depends(_require_admin
             errors.append(f"reload: {exc}")
 
     return {"saved": saved, "reloaded": reloaded, "errors": errors}
+
+
+# ── active players ───────────────────────────────────────────────────────────
+
+@admin_router.get("/worlds/{world_id}/players")
+async def world_players(world_id: str, _=Depends(_require_admin)):
+    from api.state import registry
+    world = registry.get(world_id)
+    if world is None:
+        raise HTTPException(404, "World not found")
+    result = []
+    for player in world.players.values():
+        room = world.map.get_room(player.room_id)
+        room_name = room.name if room else player.room_id
+        worn_names = {slot: world.items[i].name
+                      for slot, i in player.worn.items() if i in world.items}
+        effects = sorted(player.worn_effects(world.items))
+        active_flags = {k: v for k, v in player.flags.items()
+                        if v not in (False, None, 0, "", [])}
+        result.append({
+            "id": player.id,
+            "name": player.name,
+            "username": player.username or "guest",
+            "room_id": player.room_id,
+            "room_name": room_name,
+            "hp": player.hp,
+            "max_hp": player.max_hp,
+            "worn": worn_names,
+            "effects": effects,
+            "flags": active_flags,
+        })
+    return result
 
 
 # ── config patch ──────────────────────────────────────────────────────────────

@@ -25,7 +25,65 @@ function updateRoom(data) {
   if (data.players?.length)   parts.push("Players: " + data.players.join(", "));
   if (data.npcs?.length)      parts.push("NPCs: " + data.npcs.join(", "));
   if (data.monsters?.length)  parts.push("Enemies: " + data.monsters.join(", "));
+  if (data.items?.length)     parts.push("Items: " + data.items.join(", "));
   $("people-bar").innerHTML = parts.map(p => `<span>${p}</span>`).join("&ensp;·&ensp;");
+}
+
+function updateStatus(data) {
+  const maxHp = data.max_hp || 100;
+  const hp    = data.hp ?? maxHp;
+  const pct   = Math.max(0, Math.min(100, Math.round(hp / maxHp * 100)));
+  $("status-hp").innerHTML =
+    `<div class="hp-label">HP ${hp}/${maxHp}</div>` +
+    `<div class="hp-bar"><div class="hp-fill" style="width:${pct}%"></div></div>`;
+
+  const invEl = $("status-inv");
+  if (data.inventory?.length) {
+    invEl.textContent = "Inv: " + data.inventory.join(", ");
+    invEl.classList.remove("hidden");
+  } else {
+    invEl.classList.add("hidden");
+  }
+
+  // worn clothing
+  const wornEl = $("status-worn");
+  const worn = data.worn || {};
+  const wornEntries = Object.entries(worn);
+  if (wornEntries.length) {
+    wornEl.innerHTML = wornEntries
+      .map(([slot, name]) => `<div class="worn-row"><span class="worn-slot">${slot}</span> ${name}</div>`)
+      .join("");
+    wornEl.classList.remove("hidden");
+  } else {
+    wornEl.classList.add("hidden");
+  }
+
+  // active effects from worn items
+  const effectsEl = $("status-effects");
+  const effects = data.effects || [];
+  if (effects.length) {
+    effectsEl.innerHTML = effects.map(e =>
+      `<span class="effect-chip effect-${e}">${e.replace(/_/g," ")}</span>`
+    ).join("");
+    effectsEl.classList.remove("hidden");
+  } else {
+    effectsEl.classList.add("hidden");
+  }
+
+  const flagsEl = $("status-flags");
+  const flags = data.flags || {};
+  const entries = Object.entries(flags);
+  if (entries.length) {
+    flagsEl.innerHTML = entries.map(([k, v]) => {
+      const label = v === true ? k : `${k}: ${v}`;
+      return `<span class="flag-chip">${label}</span>`;
+    }).join("");
+    flagsEl.classList.remove("hidden");
+  } else {
+    flagsEl.classList.add("hidden");
+  }
+
+  $("status-panel").classList.remove("hidden");
 }
 
 function showAuthError(msg) {
@@ -194,6 +252,10 @@ function openWS() {
 
       case "message":
         addMessage(msg.text);
+        break;
+
+      case "status":
+        updateStatus(msg);
         break;
 
       default:

@@ -23,9 +23,26 @@ class Player:
     hp: int = 100
     max_hp: int = 100
     inventory: list[str] = field(default_factory=list)
+    worn: dict = field(default_factory=dict)     # slot → item_id
     flags: dict = field(default_factory=dict)
     session_id: Optional[str] = None
     history: list[HistoryEntry] = field(default_factory=list)
+
+    def worn_effects(self, world_items: dict) -> set[str]:
+        """Compute the set of active effects from all currently worn items."""
+        effects: set[str] = set()
+        for item_id in self.worn.values():
+            item = world_items.get(item_id)
+            if item:
+                effects.update(item.properties.get("effects", []))
+        # Also fold in script-set flags (e.g. flags["muted"] = True)
+        for key in ("muted", "restrained", "blindfolded", "no_move"):
+            if self.flags.get(key):
+                effects.add(key)
+        return effects
+
+    def has_effect(self, effect: str, world_items: dict) -> bool:
+        return effect in self.worn_effects(world_items)
 
     def to_state(self) -> dict:
         """Serialisable snapshot for account persistence."""
@@ -34,6 +51,7 @@ class Player:
             "hp": self.hp,
             "max_hp": self.max_hp,
             "inventory": list(self.inventory),
+            "worn": dict(self.worn),
             "flags": dict(self.flags),
         }
 
@@ -44,6 +62,7 @@ class Player:
         player.hp = state.get("hp", player.hp)
         player.max_hp = state.get("max_hp", player.max_hp)
         player.inventory = list(state.get("inventory", player.inventory))
+        player.worn = dict(state.get("worn", player.worn))
         player.flags = dict(state.get("flags", player.flags))
         return player
 

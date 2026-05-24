@@ -123,3 +123,18 @@ def _run_seeder(path: Path, world: WorldInstance):
     spec.loader.exec_module(mod)
     if hasattr(mod, "seed"):
         mod.seed(world)
+    _sync_entity_ids(world)
+
+
+def _sync_entity_ids(world: WorldInstance):
+    """Populate room entity_ids from NPC and item room_id fields set during seeding."""
+    for npc in world.npcs.values():
+        if npc.room_id:
+            room = world.map.get_room(npc.room_id)
+            if room and npc.id not in room.entity_ids:
+                room.add_entity(npc.id)
+    for item in world.items.values():
+        if item.room_id:
+            room = world.map.get_room(item.room_id)
+            if room and item.id not in room.entity_ids:
+                room.add_entity(item.id)

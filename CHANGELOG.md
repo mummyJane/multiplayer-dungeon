@@ -4,6 +4,17 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.7.1] - 2026-05-24 (fix Python string safety in generated scripts)
+
+### Fixed
+- **Generated scripts with apostrophes** — Claude was using single-quoted Python strings (`'you'll'`, `'it's'`) which cause `SyntaxError: unterminated string literal`. System prompt now explicitly requires double-quoted strings in all generated Python code.
+- **Broken script cascade** — when `rules/generated.py` had a syntax error it was silently dropped, causing `ModuleNotFoundError` in routines and workflows that `from rules.generated import ...`. Broken scripts are now always written to disk with a `# !! SYNTAX ERROR` comment at the top so they appear in the admin script editor and can be repaired manually without losing the generated content.
+
+### Changed
+- `admin/builder.py` — added Python string safety rules block to system prompt; `_write_script` always writes even on SyntaxError (prepends visible error comment)
+
+---
+
 ## [0.7.0] - 2026-05-24 (LLM marking, 64K buffer, script validation, items tab)
 
 ### Added

@@ -4,6 +4,18 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.6.3] - 2026-05-24 (fix cross-script imports and world.rooms API)
+
+### Fixed
+- `scripting/context.py` — scripts are loaded as isolated modules so `from rules.generated import X` failed with `ModuleNotFoundError`. Loader now tracks every loaded module and temporarily injects them into `sys.modules` under bare names (e.g. `rules.generated`, `rules`) before exec-ing each subsequent script, then cleans up. Load order is rules → routines → workflows so forward imports are never needed.
+- `worlds/instance.py` — generated scripts used `world.rooms.get(room_id)` and `world.rooms.values()` but `WorldInstance` had no `.rooms` attribute. Added `world.rooms` property (returns `self.map._rooms` dict) and `world.broadcast_to_room(room_id, text)` async helper.
+- `data/worlds/nursery_house/scripts/routines/generated.py` — `_broadcast_room` was iterating `world.sessions._sessions` (a `session_id → WebSocket` dict) as if the values were player IDs. Replaced body with `await world.broadcast_to_room(room_id, text)`.
+
+### Changed
+- `admin/builder.py` system prompt — scripting section rewritten with correct API (`world.rooms`, `world.broadcast_to_room`, `world.sessions.send(player.session_id, ...)`); cross-script imports documented as supported; removed incorrect `world.sessions._sessions` example.
+
+---
+
 ## [0.6.2] - 2026-05-24 (admin build log — debug send/receive/load)
 
 ### Added

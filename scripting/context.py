@@ -8,6 +8,8 @@ Script layout under data/worlds/<id>/scripts/:
 from __future__ import annotations
 import importlib.util
 import logging
+import sys
+import types
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Awaitable
 
@@ -25,6 +27,8 @@ class ScriptContext:
         self._rules:     dict[str, list[Handler]] = {}
         self._routines:  list[tuple[str, Handler]] = []
         self._workflows: dict[str, Handler] = {}
+        # bare_key ("rules.generated") → loaded module, for cross-script imports
+        self._loaded_mods: dict[str, Any] = {}
 
     def load(self, scripts_dir: Path):
         for category in ("rules", "routines", "workflows"):
@@ -39,7 +43,30 @@ class ScriptContext:
         try:
             spec = importlib.util.spec_from_file_location(name, path)
             mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+
+            # Temporarily inject already-loaded scripts under their bare names
+            # (e.g. "rules.generated") so that cross-script imports like
+            #   from rules.generated import find_free_room
+            # resolve correctly.  Cleaned up immediately after exec.
+            injected: list[str] = []
+            for bare_key, loaded_mod in self._loaded_mods.items():
+                if bare_key not in sys.modules:
+                    sys.modules[bare_key] = loaded_mod
+                    injected.append(bare_key)
+                # Python also needs the parent package name present
+                pkg = bare_key.rsplit(".", 1)[0] if "." in bare_key else None
+                if pkg and pkg not in sys.modules:
+                    sys.modules[pkg] = types.ModuleType(pkg)
+                    injected.append(pkg)
+
+            try:
+                spec.loader.exec_module(mod)
+            finally:
+                for k in injected:
+                    sys.modules.pop(k, None)
+
+            # Keep this module so later scripts can import from it
+            self._loaded_mods[f"{category}.{path.stem}"] = mod
 
             if category == "rules":
                 for attr in dir(mod):

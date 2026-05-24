@@ -114,37 +114,45 @@ MAP LAYOUT RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SCRIPTING CONVENTIONS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+World API — use these in all scripts:
+  world.rooms                  — dict[room_id, Room]  (use .get(id) or .values())
+  world.players                — dict[player_id, Player]
+  world.npcs                   — dict[npc_id, NPC]
+  world.map.get_room(id)       — same as world.rooms.get(id)
+  world.sessions.send(sid, {}) — send JSON to one session
+  world.broadcast_to_room(room_id, text)  — send to ALL players in a room
+  player.session_id            — use this to send a message to one player
+  player.flags                 — plain dict for per-player state
+  room.properties              — dict set in seed.py for room metadata
+
+Cross-script imports ARE supported (scripts load in order: rules → routines → workflows):
+  # In routines/generated.py you may write:
+  from rules.generated import find_free_room, _rooms_of_type
+
 Rules (rules/generated.py):
   - async functions named on_<event>(player, room, world, **kwargs)
   - Common events: player_enter, player_leave, player_action
-  - Use player.flags (a plain dict) to track per-player state:
-      player.flags["tag"] = "bad"
-      player.flags["punishment_until"] = tick_count + 20
-      player.flags.get("level", "yourself")
-  - Use room.properties to read room metadata:
-      if room.properties.get("room_type") == "punishment_nursery": ...
-  - Call world.sessions.send(player.session_id, {"type": "message", "text": "..."})
-    to narrate an event to a specific player.
+  - Use player.flags for state: player.flags["tag"] = "bad"
+  - Narrate to one player:
+      await world.sessions.send(player.session_id, {"type": "message", "text": "..."})
 
 Routines (routines/generated.py):
   - async run(world, tick_count)
-  - Use tick_count % N to run every N ticks (tick ≈ 3 s at idle, ≈ 0.5 s at peak)
-  - NPC shift scheduling: read npc.properties["shift"] to decide movement.
-  - Move an NPC: npc.room_id = new_room_id (also update room entity_ids).
-  - Send a room-wide message:
-      for sid, pid in list(world.sessions._sessions.items()):
-          p = world.players.get(pid)
-          if p and p.room_id == room_id:
-              await world.sessions.send(sid, {"type": "message", "text": "..."})
+  - tick ≈ 3 s idle, ≈ 0.5 s busy. Use tick_count % N for every-N-tick actions.
+  - NPC shift scheduling: read npc.properties["shift"] / "shift_start" / "shift_end"
+  - Move an NPC: npc.room_id = new_room_id
+  - Broadcast to a room:
+      await world.broadcast_to_room(room_id, "A nanny arrives with a bottle.")
+  - Send to one player:
+      await world.sessions.send(player.session_id, {"type": "message", "text": "..."})
 
 Workflows (workflows/generated.py):
-  - STEPS = ["step_one", "step_two", ...]
+  - STEPS = ["step_one", ...]
   - async on_progress(player, step, world, **kwargs)
-  - Triggered by scripts calling world.scripts.advance_workflow(wf_name, player=player, step=..., world=world)
 
 For a detailed spec, write MEANINGFUL scripts that implement the described rules.
-Use player.flags extensively for state machines (punishment levels, tags, room assignments, timers).
-Implement all unique schedules, rules, and progression systems mentioned in the spec.
+Use player.flags for all state machines (punishment levels, tags, timers, room assignments).
+Implement all schedules, feeding rules, and progression systems mentioned in the spec.
 """
 
 

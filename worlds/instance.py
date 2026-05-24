@@ -62,6 +62,17 @@ class WorldInstance:
     def player_count(self) -> int:
         return len(self.players)
 
+    @property
+    def rooms(self) -> dict:
+        """Convenience access for scripts: world.rooms[room_id] or world.rooms.get(room_id)."""
+        return self.map._rooms
+
+    async def broadcast_to_room(self, room_id: str, text: str):
+        """Send a message to every player currently in room_id."""
+        for player in list(self.players.values()):
+            if player.room_id == room_id and player.session_id:
+                await self.sessions.send(player.session_id, {"type": "message", "text": text})
+
     # ── debug logger access ───────────────────────────────────────────────────
 
     def get_debug_logger(self, player_id: str) -> Optional[PlayerDebugLogger]:

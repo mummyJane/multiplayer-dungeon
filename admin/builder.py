@@ -435,3 +435,248 @@ def _write_script(path: Path, source: str) -> str | None:
         src = f"# !! SYNTAX ERROR — fix before this script will load\n# !! {syntax_err}\n\n" + src
     path.write_text(src, encoding="utf-8")
     return syntax_err
+
+
+# ── world expansion ────────────────────────────────────────────────────────────
+
+_SYSTEM_EXPAND = """\
+You are expanding an existing game world in a real-time multiplayer text RPG engine.
+You will receive a description of the CURRENT world (rooms, NPCs, items) and a spec for NEW content to add.
+
+Return ONLY a valid JSON object — no markdown fences, no commentary.
+
+CRITICAL JSON SAFETY RULES (same as world builder):
+1. Every double-quote inside a string value MUST be escaped as \"
+2. Never put raw newlines inside string values — use \\n if needed.
+3. No trailing commas before } or ].
+
+CRITICAL PYTHON SCRIPT SAFETY RULES:
+1. ALWAYS use double-quoted strings — NEVER single-quoted.
+2. ALL import statements MUST be at the top of the file (module level).
+3. Every opened string MUST be closed on the same line.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXPANSION JSON SHAPE  (do NOT include a "config" key)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "zones": [...],      // new zones only — omit if no new zones needed
+  "rooms": [
+    {
+      "id": "<NEW slug — MUST NOT duplicate any existing room ID>",
+      "name": "<name>",
+      "description": "<2-3 sentences>",
+      "zone_id": "<existing or new zone_id>",
+      "x": <int>, "y": <int>, "z": <int>,
+      "exits": {
+        "north": "<room_id>",     // may reference EXISTING room IDs to connect new area
+        "up": "<room_id>"
+      },
+      "properties": {}
+    }
+  ],
+  "npcs": [
+    {
+      "id": "<NEW slug>",
+      "name": "<name>",
+      "description": "<sentence>",
+      "room_id": "<new or existing room_id>",
+      "dialogue": ["<line>", "..."],
+      "properties": {}
+    }
+  ],
+  "items": [
+    {
+      "id": "<NEW slug>",
+      "name": "<name>",
+      "description": "<sentence>",
+      "item_type": "clothing|consumable|misc|weapon|armour|fixture",
+      "room_id": "<new or existing room_id or null>",
+      "properties": {}
+    }
+  ],
+  "rules_script":    "<optional Python — new rules handlers only>",
+  "routines_script": "<optional Python — new routine additions only>",
+  "workflows_script": "<optional Python>"
+}
+
+RULES:
+- Generate ONLY new content. NEVER duplicate existing IDs.
+- New room exits may connect to existing rooms (use their IDs) — this creates physical links.
+- If an existing room should gain an exit INTO the new area, include that in "connect_exits":
+  "connect_exits": {"existing_room_id": {"direction": "new_room_id"}}
+- Scripts should import from existing rules.generated if needed (at module top level).
+"""
+
+
+def _world_context_summary(world) -> str:
+    """Produce a compact text summary of the current world for the expansion prompt."""
+    lines = [
+        f"WORLD: {world.config.id!r}  name={world.config.name!r}",
+        f"description: {world.config.description}",
+        "",
+        f"ROOMS ({len(world.map._rooms)}):",
+    ]
+    for r in sorted(world.map._rooms.values(), key=lambda x: (x.z, x.y, x.x)):
+        exits = ", ".join(f"{d}→{t}" for d, t in r.exits.items()) or "none"
+        lines.append(f"  {r.id!r:40s}  z={r.z}  [{exits}]  — {r.name}")
+
+    lines += ["", f"NPCs ({len(world.npcs)}):"]
+    for n in sorted(world.npcs.values(), key=lambda x: x.name):
+        lines.append(f"  {n.id!r:40s}  room={n.room_id!r}  — {n.name}")
+
+    lines += ["", f"ITEMS ({len(world.items)}):"]
+    for i in sorted(world.items.values(), key=lambda x: x.name):
+        lines.append(f"  {i.id!r:40s}  room={str(i.room_id)!r}  — {i.name}")
+
+    return "\n".join(lines)
+
+
+async def expand_world(world, spec_text: str, build_log: list) -> dict:
+    """Call Claude to generate expansion content for an existing world.
+
+    world — live WorldInstance (used to build context summary).
+    Returns a partial world dict (no 'config' key) with new rooms/NPCs/items/scripts.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        build_log.append("ERROR  No ANTHROPIC_API_KEY set — cannot call Claude")
+        raise ValueError("ANTHROPIC_API_KEY is not set")
+
+    context = _world_context_summary(world)
+    user_msg = (
+        f"{context}\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"EXPANSION REQUEST:\n{spec_text}"
+    )
+
+    build_log.append(
+        f"SEND   model=claude-opus-4-7  expand for={world.config.id!r}  "
+        f"spec={len(spec_text)} chars"
+    )
+    log.info("[builder] Sending expansion request for %s (%d chars)", world.config.id, len(spec_text))
+
+    client = anthropic.AsyncAnthropic(api_key=api_key)
+    async with client.messages.stream(
+        model="claude-opus-4-7",
+        max_tokens=65536,
+        system=_SYSTEM_EXPAND,
+        messages=[{"role": "user", "content": user_msg}],
+    ) as stream:
+        raw = await stream.get_final_text()
+        msg = await stream.get_final_message()
+    raw = raw.strip()
+
+    build_log.append(
+        f"RECV   raw={len(raw)} chars  stop_reason={msg.stop_reason}"
+    )
+
+    stripped = raw
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+    data, repair_note = _parse_with_repair(stripped)
+    if data is None:
+        build_log.append("ERROR  JSON parse failed — all repair strategies exhausted")
+        raise ValueError("Expansion builder returned invalid JSON")
+    if repair_note:
+        build_log.append(f"REPAIR {repair_note}")
+
+    rooms = len(data.get("rooms", []))
+    npcs  = len(data.get("npcs", []))
+    items = len(data.get("items", []))
+    build_log.append(f"PARSE  JSON OK — rooms={rooms}  npcs={npcs}  items={items}")
+    return data
+
+
+def _load_manual(world_id: str) -> dict:
+    path = _DATA_ROOT / world_id / "manual.json"
+    if not path.exists():
+        return {"rooms": {}, "npcs": {}, "items": {}, "deleted": []}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _save_manual(world_id: str, data: dict):
+    path = _DATA_ROOT / world_id / "manual.json"
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def materialise_expansion(world_id: str, data: dict) -> tuple[Path, list[str]]:
+    """Persist expansion data to disk:
+    - New rooms/NPCs/items added to manual.json as 'add' actions.
+    - Exits to add to existing rooms stored in manual.json room edits.
+    - New scripts saved as rules_expand_N.py / routines_expand_N.py etc.
+    Returns (world_dir, script_errors).
+    """
+    world_dir = _DATA_ROOT / world_id
+    scripts_dir = world_dir / "scripts"
+    manual = _load_manual(world_id)
+
+    for r in data.get("zones", []):
+        pass  # zones don't need persistence (added live only)
+
+    for r in data.get("rooms", []):
+        manual["rooms"][r["id"]] = {
+            "_action": "add",
+            "name": r.get("name", r["id"]),
+            "description": r.get("description", ""),
+            "zone_id": r.get("zone_id", "default"),
+            "x": r.get("x", 0), "y": r.get("y", 0), "z": r.get("z", 0),
+            "exits": r.get("exits", {}),
+            "properties": r.get("properties", {}),
+            "creator": "claude_api",
+        }
+
+    # connect_exits: patch existing rooms to point at new rooms
+    for existing_id, exit_patch in data.get("connect_exits", {}).items():
+        if existing_id not in manual["rooms"]:
+            manual["rooms"][existing_id] = {"_action": "edit", "exits": {}}
+        entry = manual["rooms"][existing_id]
+        if "_action" not in entry:
+            entry["_action"] = "edit"
+        if "exits" not in entry:
+            entry["exits"] = {}
+        entry["exits"].update(exit_patch)
+
+    for n in data.get("npcs", []):
+        manual["npcs"][n["id"]] = {
+            "_action": "add",
+            "name": n.get("name", n["id"]),
+            "description": n.get("description", ""),
+            "room_id": n.get("room_id", ""),
+            "dialogue": n.get("dialogue", []),
+            "properties": n.get("properties", {}),
+            "creator": "claude_api",
+        }
+
+    for i in data.get("items", []):
+        manual["items"][i["id"]] = {
+            "_action": "add",
+            "name": i.get("name", i["id"]),
+            "description": i.get("description", ""),
+            "item_type": i.get("item_type", "misc"),
+            "room_id": i.get("room_id"),
+            "properties": i.get("properties", {}),
+            "creator": "claude_api",
+        }
+
+    _save_manual(world_id, manual)
+
+    # expansion scripts — numbered to avoid overwriting existing ones
+    script_errors: list[str] = []
+    for cat, key in [("rules", "rules_script"), ("routines", "routines_script"),
+                     ("workflows", "workflows_script")]:
+        src = data.get(key)
+        if not src or not src.strip():
+            continue
+        cat_dir = scripts_dir / cat
+        cat_dir.mkdir(parents=True, exist_ok=True)
+        n = len(list(cat_dir.glob(f"{cat}_expand_*.py"))) + 1
+        path = cat_dir / f"{cat}_expand_{n:03d}.py"
+        err = _write_script(path, src)
+        if err:
+            script_errors.append(f"{cat}_expand_{n:03d}: {err}")
+
+    log.info("Expansion materialised for %s: %d rooms, %d npcs, %d items",
+             world_id, len(data.get("rooms", [])),
+             len(data.get("npcs", [])), len(data.get("items", [])))
+    return world_dir, script_errors

@@ -4,6 +4,28 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.9.0] - 2026-05-24 (world expansion, full CRUD, three-tier auth, accounts)
+
+### Added
+- **World expansion with Claude** — new "Expand with AI" tab in the world editor. Describe a new area or building; Claude receives full context of the existing world (all room IDs, exits, NPCs, items) and generates only NEW content that connects into the existing map. Expansion rooms/NPCs/items are saved to `manual.json` and expansion scripts are written as numbered files (`rules_expand_001.py`, etc.) to avoid overwriting hand-written scripts. `connect_exits` entries in the expansion JSON patch existing rooms to link into the new area.
+- **Full CRUD for rooms, NPCs, items** — world editor now has Add/Edit/Delete for all three entity types. Changes are persisted to `manual.json` (add/edit/delete actions) and applied live to the running world immediately. `worlds/registry.py` applies `manual.json` over `seed.py` on every world load, keeping the disk state authoritative.
+- **Three-tier account roles** — `Account.role` is now `"player"` | `"world_admin"` | `"admin"`. Full admins have all rights (create/delete worlds, manage accounts, set roles). World admins can edit and expand their assigned worlds. Players play only.
+- **Admin username/password login** — admin panel now accepts both API key (full admin, unchanged) and username+password for `world_admin` and `admin` accounts. Bearer token returned on login, stored in `localStorage`. A single `_resolve_auth()` helper in `admin/routes.py` accepts both auth methods.
+- **Admin accounts section** — full admins see a new Accounts section listing all player accounts with role badges; inline edit row lets them change role and set managed-world IDs.
+- **`manual.json` overlay pattern** — per-world JSON file at `data/worlds/<id>/manual.json` stores add/edit/delete actions for rooms, NPCs, and items. `_apply_manual(world, data)` in `worlds/registry.py` replays these over the seeded world on load, so CRUD changes and AI expansions survive restarts without touching `seed.py`.
+
+### Changed
+- `admin/builder.py` — added `_SYSTEM_EXPAND`, `_world_context_summary()`, `expand_world()`, `materialise_expansion()`, `_load_manual()`, `_save_manual()` for the expansion flow
+- `admin/routes.py` — complete rewrite: `_admin_tokens` dict for bearer-token auth; `_resolve_auth`, `_require_admin`, `_require_any_admin`, `_check_world_access` helpers; new endpoints: `POST /admin/auth`, `POST /admin/logout`, `POST/PATCH/DELETE /admin/worlds/{id}/rooms`, `POST/PATCH/DELETE /admin/worlds/{id}/npcs`, `POST/PATCH/DELETE /admin/worlds/{id}/items`, `POST /admin/worlds/{id}/expand`, `GET /admin/accounts`, `PATCH /admin/accounts/{username}/role`
+- `auth/accounts.py` — `Account` gains `role`, `managed_worlds`, `email`, `sex`, `real_age`, `description`, `world_states`, `world_context`; new methods `list_accounts()`, `set_role()`, `update_profile()`, `change_password()`, `set_world_context()`, `get_world_context()`
+- `world/map.py` — added `remove_room(room_id)` to support live deletion
+- `worlds/registry.py` — `load_from_disk` now applies `manual.json` after `seed.py`; `_apply_manual()` function added
+- `web/admin.html` — dual auth bar; CRUD add/edit forms for rooms, NPCs, items; Expand tab; Accounts section (full admin only); sections conditionally shown by role
+- `web/js/admin.js` — complete rewrite: dual auth, `onAuthSuccess()` role-gated visibility, `renderRoomsTable/renderNpcsTable/renderItemsTable` with inline edit, expansion log panel, accounts management
+- `web/css/admin.css` — dual auth bar layout, CRUD bars/forms, expand log, accounts role chips
+
+---
+
 ## [0.8.0] - 2026-05-24 (creator tagging, story log, player dashboard)
 
 ### Added

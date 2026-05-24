@@ -12,15 +12,25 @@
     <header>
       <h1>World Admin</h1>
       <div id="auth-bar">
-        <input id="admin-key" type="password" placeholder="Admin key…">
-        <button id="auth-btn">Authenticate</button>
+        <!-- API key login (full admin) -->
+        <div id="auth-key-form">
+          <input id="admin-key" type="password" placeholder="Admin API key…">
+          <button id="auth-btn">Key Login</button>
+        </div>
+        <!-- Account login (world_admin or admin) -->
+        <div id="auth-user-form">
+          <input id="auth-username" type="text" maxlength="32" placeholder="Username">
+          <input id="auth-password" type="password" maxlength="64" placeholder="Password">
+          <button id="auth-user-btn">Sign In</button>
+        </div>
         <span id="auth-status"></span>
+        <button id="auth-logout-btn" class="hidden muted">Sign Out</button>
       </div>
     </header>
 
     <!-- Active worlds -->
-    <section>
-      <h2>Active Worlds</h2>
+    <section id="section-worlds" class="hidden">
+      <h2>Active Worlds <span id="role-badge" class="gm-badge"></span></h2>
       <table id="worlds-table">
         <thead>
           <tr><th>ID</th><th>Name</th><th>Description</th><th>Players</th><th>Actions</th></tr>
@@ -40,6 +50,7 @@
         <button class="etab" data-etab="items">Items</button>
         <button class="etab" data-etab="players">Players</button>
         <button class="etab" data-etab="scripts">Scripts</button>
+        <button class="etab" data-etab="expand">Expand with AI</button>
       </div>
 
       <!-- overview tab -->
@@ -56,12 +67,35 @@
 
       <!-- rooms tab -->
       <div class="etab-panel hidden" id="etab-rooms">
-        <p class="muted" id="ed-rooms-count"></p>
+        <div class="crud-bar">
+          <p class="muted" id="ed-rooms-count"></p>
+          <button id="ed-add-room-btn">+ Add Room</button>
+        </div>
+        <!-- add/edit form -->
+        <div id="room-form" class="crud-form hidden">
+          <div class="form-grid">
+            <label>ID (slug)<input id="rf-id" type="text" maxlength="64"></label>
+            <label>Name<input id="rf-name" type="text" maxlength="80"></label>
+            <label>Zone ID<input id="rf-zone" type="text" maxlength="40"></label>
+            <label>Floor z<input id="rf-z" type="number" value="0"></label>
+          </div>
+          <label class="full-label">Description
+            <textarea id="rf-desc" rows="2" maxlength="500"></textarea>
+          </label>
+          <div class="form-grid">
+            <label>Exits JSON<input id="rf-exits" type="text" placeholder='{"north":"room_id"}'></label>
+            <label>Properties JSON<input id="rf-props" type="text" placeholder='{"room_type":"hall"}'></label>
+          </div>
+          <div class="crud-actions">
+            <button id="rf-save-btn">Save Room</button>
+            <button id="rf-cancel-btn" class="muted">Cancel</button>
+            <span id="rf-status" class="muted"></span>
+          </div>
+        </div>
         <div class="scroll-table">
           <table id="ed-rooms-table">
             <thead><tr>
-              <th>ID</th><th>Name</th><th>Floor&nbsp;z</th><th>Zone</th>
-              <th>Type</th><th>Exits</th>
+              <th>ID</th><th>Name</th><th>z</th><th>Zone</th><th>Type</th><th>Exits</th><th>Creator</th><th></th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -70,12 +104,32 @@
 
       <!-- npcs tab -->
       <div class="etab-panel hidden" id="etab-npcs">
-        <p class="muted" id="ed-npcs-count"></p>
+        <div class="crud-bar">
+          <p class="muted" id="ed-npcs-count"></p>
+          <button id="ed-add-npc-btn">+ Add NPC</button>
+        </div>
+        <div id="npc-form" class="crud-form hidden">
+          <div class="form-grid">
+            <label>ID (slug)<input id="nf-id" type="text" maxlength="64"></label>
+            <label>Name<input id="nf-name" type="text" maxlength="80"></label>
+            <label>Room ID<input id="nf-room" type="text" maxlength="64"></label>
+          </div>
+          <label class="full-label">Description
+            <textarea id="nf-desc" rows="2" maxlength="300"></textarea>
+          </label>
+          <label class="full-label">Dialogue (one line per entry)
+            <textarea id="nf-dialogue" rows="3" maxlength="1000"></textarea>
+          </label>
+          <div class="crud-actions">
+            <button id="nf-save-btn">Save NPC</button>
+            <button id="nf-cancel-btn" class="muted">Cancel</button>
+            <span id="nf-status" class="muted"></span>
+          </div>
+        </div>
         <div class="scroll-table">
           <table id="ed-npcs-table">
             <thead><tr>
-              <th>ID</th><th>Name</th><th>Description</th>
-              <th>Room</th><th>Role</th><th>Shift</th>
+              <th>ID</th><th>Name</th><th>Description</th><th>Room</th><th>Role</th><th>Creator</th><th></th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -84,11 +138,33 @@
 
       <!-- items tab -->
       <div class="etab-panel hidden" id="etab-items">
-        <p class="muted" id="ed-items-count"></p>
+        <div class="crud-bar">
+          <p class="muted" id="ed-items-count"></p>
+          <button id="ed-add-item-btn">+ Add Item</button>
+        </div>
+        <div id="item-form" class="crud-form hidden">
+          <div class="form-grid">
+            <label>ID (slug)<input id="if-id" type="text" maxlength="64"></label>
+            <label>Name<input id="if-name" type="text" maxlength="80"></label>
+            <label>Type<select id="if-type"><option>misc</option><option>clothing</option><option>fixture</option><option>consumable</option><option>weapon</option><option>armour</option></select></label>
+            <label>Room ID<input id="if-room" type="text" maxlength="64" placeholder="or blank"></label>
+          </div>
+          <label class="full-label">Description
+            <textarea id="if-desc" rows="2" maxlength="300"></textarea>
+          </label>
+          <label class="full-label">Properties JSON
+            <input id="if-props" type="text" placeholder='{"wearable":true,"slot":"mouth","effects":["mute"]}'>
+          </label>
+          <div class="crud-actions">
+            <button id="if-save-btn">Save Item</button>
+            <button id="if-cancel-btn" class="muted">Cancel</button>
+            <span id="if-status" class="muted"></span>
+          </div>
+        </div>
         <div class="scroll-table">
           <table id="ed-items-table">
             <thead><tr>
-              <th>ID</th><th>Name</th><th>Type</th><th>Room</th><th>Properties</th>
+              <th>ID</th><th>Name</th><th>Type</th><th>Room</th><th>Properties</th><th>Creator</th><th></th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -125,36 +201,44 @@
         </div>
       </div>
 
+      <!-- expand tab -->
+      <div class="etab-panel hidden" id="etab-expand">
+        <p class="muted">
+          Describe a new area, building, or addition to this world. Claude will generate new rooms, NPCs,
+          and items that connect into the existing map. Existing content is not changed.
+        </p>
+        <textarea id="expand-spec" rows="12"
+          placeholder="e.g. Add a large underground dungeon beneath the castle, with 6 rooms including a boss chamber…"></textarea>
+        <div class="expand-actions">
+          <button id="expand-btn">Expand World</button>
+          <span id="expand-status" class="muted"></span>
+        </div>
+        <div id="expand-log-section" class="hidden">
+          <h3>Expansion Log</h3>
+          <pre id="expand-log"></pre>
+        </div>
+      </div>
+
       <div style="margin-top:1rem">
         <button id="ed-close" class="muted">Close editor</button>
       </div>
     </section>
 
-    <!-- Generate / Upload -->
-    <section>
+    <!-- Generate / Upload (full admin only) -->
+    <section id="section-generate" class="hidden">
       <h2>Create World with Claude</h2>
-
-      <!-- tab bar -->
       <div class="tab-bar">
         <button class="tab active" data-tab="paste">Paste spec / theme</button>
         <button class="tab" data-tab="upload">Upload file</button>
       </div>
-
-      <!-- paste tab -->
       <div class="tab-panel" id="tab-paste">
-        <p class="muted">
-          Paste a short theme ("a sunken elven city…") or a full detailed world specification document.
-        </p>
+        <p class="muted">Paste a short theme or a full detailed world specification document.</p>
         <textarea id="spec-input" rows="12"
-          placeholder="Describe the world — a couple of sentences for a quick theme, or paste a full spec document for a detailed build…"></textarea>
+          placeholder="Describe the world — a couple of sentences for a quick theme, or paste a full spec…"></textarea>
         <button id="generate-btn">Generate World</button>
       </div>
-
-      <!-- upload tab -->
       <div class="tab-panel hidden" id="tab-upload">
-        <p class="muted">
-          Upload a plain-text (.txt, .md) spec file. UTF-8, max 512 KB.
-        </p>
+        <p class="muted">Upload a plain-text (.txt, .md) spec file. UTF-8, max 512 KB.</p>
         <div id="drop-zone">
           <span id="drop-label">Drop a file here, or click to browse</span>
           <input id="file-input" type="file" accept=".txt,.md,.text" hidden>
@@ -162,11 +246,7 @@
         <div id="file-name" class="muted"></div>
         <button id="upload-btn" disabled>Generate from File</button>
       </div>
-
-      <!-- shared status -->
       <div id="generate-status" class="hidden"></div>
-
-      <!-- preview of generated world -->
       <div id="generate-preview" class="hidden">
         <h3>Generated</h3>
         <table>
@@ -174,16 +254,14 @@
           <tbody id="preview-tbody"></tbody>
         </table>
       </div>
-
-      <!-- build log -->
       <div id="build-log-section" class="hidden">
         <h3>Build Log</h3>
         <pre id="build-log"></pre>
       </div>
     </section>
 
-    <!-- Manual create -->
-    <section>
+    <!-- Manual create (full admin only) -->
+    <section id="section-manual" class="hidden">
       <h2>Create Blank World</h2>
       <p class="muted">Creates an empty world — add rooms and scripts by hand in data/worlds/&lt;id&gt;/.</p>
       <div class="form-row">
@@ -192,6 +270,37 @@
         <button id="manual-btn">Create</button>
       </div>
       <div id="manual-status"></div>
+    </section>
+
+    <!-- Accounts (full admin only) -->
+    <section id="section-accounts" class="hidden">
+      <h2>Player Accounts</h2>
+      <p class="muted">Set roles and world assignments. Changes take effect immediately.</p>
+      <table id="accounts-table">
+        <thead><tr><th>Username</th><th>Role</th><th>Managed worlds</th><th>Last login</th><th></th></tr></thead>
+        <tbody id="accounts-tbody"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+      </table>
+      <!-- inline edit row shown below selected account -->
+      <div id="account-edit" class="crud-form hidden">
+        <p>Editing: <strong id="ae-username"></strong></p>
+        <div class="form-grid">
+          <label>Role
+            <select id="ae-role">
+              <option value="player">player</option>
+              <option value="world_admin">world_admin</option>
+              <option value="admin">admin</option>
+            </select>
+          </label>
+          <label>Managed worlds (comma-separated IDs)
+            <input id="ae-worlds" type="text" placeholder="world1, world2">
+          </label>
+        </div>
+        <div class="crud-actions">
+          <button id="ae-save-btn">Save Role</button>
+          <button id="ae-cancel-btn" class="muted">Cancel</button>
+          <span id="ae-status" class="muted"></span>
+        </div>
+      </div>
     </section>
 
   </div>

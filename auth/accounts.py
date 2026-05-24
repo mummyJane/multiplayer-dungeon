@@ -20,6 +20,10 @@ class Account:
     password_hash: str   # "salt$hash" hex strings
     created_at: str = ""
     last_login: str = ""
+    # role: "player" | "world_admin" | "admin"
+    role: str = "player"
+    # world IDs a world_admin is allowed to manage
+    managed_worlds: list = field(default_factory=list)
     # player profile
     email: str = ""
     sex: str = ""           # free text, player self-describes
@@ -76,6 +80,38 @@ class AccountManager:
 
     def get(self, username: str) -> Optional[Account]:
         return self._load_account(username.strip().lower())
+
+    def list_accounts(self) -> list[dict]:
+        """Return public summary of all accounts."""
+        result = []
+        if not _DATA_ROOT.exists():
+            return result
+        for acc_dir in _DATA_ROOT.iterdir():
+            if not acc_dir.is_dir():
+                continue
+            acc = self._load_account(acc_dir.name)
+            if acc:
+                result.append({
+                    "username":       acc.username,
+                    "role":           acc.role,
+                    "managed_worlds": acc.managed_worlds,
+                    "created_at":     acc.created_at,
+                    "last_login":     acc.last_login,
+                })
+        return result
+
+    def set_role(self, username: str, role: str,
+                 managed_worlds: list | None = None) -> tuple[bool, str]:
+        if role not in ("player", "world_admin", "admin"):
+            return False, "Invalid role"
+        acc = self._load_account(username.strip().lower())
+        if acc is None:
+            return False, "Account not found"
+        acc.role = role
+        if managed_worlds is not None:
+            acc.managed_worlds = list(managed_worlds)
+        self._save_account(acc)
+        return True, ""
 
     def update_profile(self, username: str, **fields) -> tuple[bool, str]:
         """Update profile fields (email, sex, real_age, description)."""

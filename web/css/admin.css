@@ -126,3 +126,36 @@ td.center{ text-align: center; }
 .form-row { display: flex; gap: .5rem; flex-wrap: wrap; }
 .form-row input { flex: 1; min-width: 140px; }
 #manual-status { margin-top: .5rem; font-size: 13px; }
+
+/* dual auth bar */
+#auth-bar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+#auth-key-form, #auth-user-form { display: flex; gap: .4rem; align-items: center; }
+#auth-key-form::after { content: "or"; color: var(--muted); font-size: 11px; margin-left: .25rem; }
+#auth-bar input { width: 150px; }
+
+/* CRUD bars and forms */
+.crud-bar { display: flex; align-items: center; gap: 1rem; margin-bottom: .5rem; }
+.crud-bar .muted { flex: 1; margin: 0; }
+.crud-form { background: #0a0a0a; border: 1px solid var(--border); padding: 1rem; margin-bottom: .75rem; }
+.crud-form .form-grid { margin-bottom: .5rem; }
+.crud-form .full-label { display: flex; flex-direction: column; gap: .2rem; font-size: 12px; color: var(--muted); margin-bottom: .5rem; }
+.crud-form .full-label textarea, .crud-form .full-label input { font-size: 12px; }
+.crud-actions { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
+td .row-btns { display: flex; gap: .3rem; }
+td .row-btns button { font-size: 11px; padding: .15rem .5rem; }
+
+/* expand tab */
+#expand-spec { width: 100%; resize: vertical; margin-bottom: .5rem; }
+.expand-actions { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
+#expand-log { background: #0a0a0a; border: 1px solid var(--border); color: #9a9a9a;
+  font-family: var(--font); font-size: 12px; line-height: 1.6; padding: .75rem 1rem;
+  max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+
+/* accounts section */
+#accounts-table .role-chip { font-size: 11px; padding: .1rem .4rem; border: 1px solid var(--border); }
+.role-admin       { color: var(--error); border-color: var(--error) !important; }
+.role-world_admin { color: #bf9f3f; border-color: #bf9f3f !important; }
+.role-player      { color: var(--muted); }
+
+/* role badge in section header */
+#role-badge { vertical-align: middle; margin-left: .5rem; }

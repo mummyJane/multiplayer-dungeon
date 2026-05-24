@@ -29,6 +29,11 @@ class WorldMap:
     def get_room(self, room_id: str) -> Optional[Room]:
         return self._rooms.get(room_id)
 
+    def remove_room(self, room_id: str):
+        self._rooms.pop(room_id, None)
+        if self._entry_room_id == room_id:
+            self._entry_room_id = None
+
     def rooms_in_zone(self, zone_id: str) -> list[Room]:
         return [r for r in self._rooms.values() if r.zone_id == zone_id]
 

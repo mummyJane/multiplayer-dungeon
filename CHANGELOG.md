@@ -4,6 +4,20 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.6.4] - 2026-05-24 (JSON repair pipeline for world builder)
+
+### Added
+- `json-repair>=0.30.0` added to `requirements.txt` and installed into `.venv`
+- `admin/builder.py` — `_repair_json_inline(raw)`: pure-stdlib fix for the two most common LLM JSON mistakes: literal newlines/tabs inside string values (e.g. multi-line descriptions) and trailing commas before `}` / `]`
+- `admin/builder.py` — `_parse_with_repair(raw)` tries three strategies in order: (1) direct `json.loads`, (2) inline repair, (3) `json-repair` library which handles unescaped double-quotes inside strings, structural issues, and more
+- Build log now shows which repair strategy succeeded (e.g. `REPAIR json-repair library (unescaped quotes / structural issues)`)
+
+### Changed
+- `admin/builder.py` system prompt — added **CRITICAL JSON SAFETY RULES** block at the top: dialogue and description strings must escape inner `"` as `\"`, no raw newlines in strings, no trailing commas
+- Error path in `build_world` now reports which strategy failed and shows a context snippet
+
+---
+
 ## [0.6.3] - 2026-05-24 (fix cross-script imports and world.rooms API)
 
 ### Fixed

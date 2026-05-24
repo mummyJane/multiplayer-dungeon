@@ -24,6 +24,13 @@ You receive either:
 Return ONLY a valid JSON object — no markdown fences, no commentary.
 For a detailed spec, extract ALL rooms and NPCs described; do not summarise or skip any.
 
+CRITICAL JSON SAFETY RULES — violations cause parse errors:
+1. Every double-quote character inside a string value MUST be escaped as \"
+   WRONG:  "dialogue": ["She said "hello" to the baby."]
+   RIGHT:  "dialogue": ["She said \"hello\" to the baby."]
+2. Never put raw newlines inside string values — use \n if needed.
+3. No trailing commas before } or ].
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REQUIRED JSON SHAPE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -156,6 +163,80 @@ Implement all schedules, feeding rules, and progression systems mentioned in the
 """
 
 
+def _repair_json_inline(raw: str) -> str:
+    """Fix the two most common LLM JSON mistakes without any library.
+
+    1. Literal newlines / carriage returns / tabs inside string values.
+    2. Trailing commas before ] or }.
+    """
+    import re
+    result: list[str] = []
+    in_string = False
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+        if ch == '\\' and in_string:
+            # Escape sequence — keep both chars verbatim.
+            result.append(ch)
+            i += 1
+            if i < len(raw):
+                result.append(raw[i])
+                i += 1
+            continue
+        if ch == '"':
+            in_string = not in_string
+            result.append(ch)
+        elif in_string and ch == '\n':
+            result.append('\\n')
+        elif in_string and ch == '\r':
+            result.append('\\r')
+        elif in_string and ch == '\t':
+            result.append('\\t')
+        else:
+            result.append(ch)
+        i += 1
+    cleaned = ''.join(result)
+    # Remove trailing commas before } or ]
+    cleaned = re.sub(r',(\s*[}\]])', r'\1', cleaned)
+    return cleaned
+
+
+def _parse_with_repair(raw: str) -> tuple[dict | None, str]:
+    """Try to parse JSON, applying progressively heavier repair steps.
+
+    Returns (data, repair_note) — repair_note is empty string on clean parse.
+    Returns (None, "") if all strategies fail.
+    """
+    # Strategy 1 — parse as-is
+    try:
+        return json.loads(raw), ""
+    except json.JSONDecodeError as exc1:
+        log.debug("JSON parse pass 1 failed: %s", exc1)
+
+    # Strategy 2 — inline fix: literal newlines + trailing commas
+    try:
+        fixed = _repair_json_inline(raw)
+        return json.loads(fixed), "inline fix (literal newlines / trailing commas)"
+    except json.JSONDecodeError as exc2:
+        log.debug("JSON parse pass 2 failed: %s", exc2)
+
+    # Strategy 3 — json-repair library (handles unescaped quotes, truncation, etc.)
+    try:
+        from json_repair import repair_json
+        repaired = repair_json(raw, return_objects=True)
+        if isinstance(repaired, dict) and repaired:
+            return repaired, "json-repair library (unescaped quotes / structural issues)"
+        # repair_json may return a string when return_objects isn't supported
+        if isinstance(repaired, str):
+            return json.loads(repaired), "json-repair library"
+    except ImportError:
+        log.warning("[builder] json-repair not installed — run: pip install json-repair")
+    except Exception as exc3:
+        log.debug("JSON parse pass 3 (json-repair) failed: %s", exc3)
+
+    return None, ""
+
+
 async def build_world(spec_text: str, build_log: list) -> dict:
     """Call Claude with a theme or spec, return parsed world dict.
 
@@ -198,16 +279,18 @@ async def build_world(spec_text: str, build_log: list) -> dict:
         stripped = stripped.rsplit("```", 1)[0].strip()
         build_log.append("PARSE  Stripped markdown fences from response")
 
-    try:
-        data = json.loads(stripped)
-    except json.JSONDecodeError as exc:
+    data, repair_note = _parse_with_repair(stripped)
+    if data is None:
+        ctx = stripped[max(0, 15780):15900] if len(stripped) > 15780 else stripped[-200:]
         build_log.append(
-            f"ERROR  JSON parse failed at char {exc.pos}: {exc.msg}  "
-            f"context: {stripped[max(0,exc.pos-60):exc.pos+60]!r}"
+            f"ERROR  JSON parse failed — all repair strategies exhausted.  "
+            f"context near error: {ctx!r}"
         )
-        log.error("[builder] JSON parse failed: %s  near: %r",
-                  exc, stripped[max(0,exc.pos-60):exc.pos+60])
-        raise ValueError(f"World builder returned invalid JSON: {exc.msg}") from exc
+        log.error("[builder] JSON unrecoverable.  context: %r", ctx)
+        raise ValueError("World builder returned invalid JSON (all repair strategies failed)")
+    if repair_note:
+        build_log.append(f"REPAIR {repair_note}")
+        log.info("[builder] JSON repaired: %s", repair_note)
 
     rooms = len(data.get("rooms", []))
     npcs  = len(data.get("npcs",  []))

@@ -31,7 +31,7 @@ CRITICAL JSON SAFETY RULES — violations cause parse errors:
 2. Never put raw newlines inside string values — use \n if needed.
 3. No trailing commas before } or ].
 
-CRITICAL PYTHON SCRIPT SAFETY RULES — violations cause SyntaxError:
+CRITICAL PYTHON SCRIPT SAFETY RULES — violations cause SyntaxError or ModuleNotFoundError:
 1. ALWAYS use double-quoted strings in Python: "text" — NEVER single-quoted 'text'
    Reason: apostrophes in English words like "you'll", "it's", "don't" will break
    a single-quoted string but are safe inside double quotes.
@@ -40,6 +40,12 @@ CRITICAL PYTHON SCRIPT SAFETY RULES — violations cause SyntaxError:
 2. To embed a double-quote inside a string, escape it: "She said \"hello\""
 3. Never write a string literal that spans multiple lines — use \n inside instead.
 4. Every opened string MUST be closed on the same line.
+5. ALL import statements MUST be at the TOP of the file (module level) — NEVER inside a
+   function body. Lazy imports inside functions fail at runtime because the module
+   namespace is only available at load time.
+   WRONG:  async def _hourly_announce(world):
+               from rules.generated import _rooms_of_type   # ← CRASHES at runtime
+   RIGHT:  from rules.generated import _rooms_of_type       # ← top of file, always
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REQUIRED JSON SHAPE

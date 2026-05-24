@@ -4,6 +4,18 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.7.2] - 2026-05-24 (fix lazy imports in LLM-generated scripts)
+
+### Fixed
+- **ModuleNotFoundError on lazy imports** — LLM-generated scripts sometimes place `from rules.generated import ...` inside function bodies rather than at module top-level. These imports run at tick/event time when `sys.modules` no longer contains the injected script modules, causing `ModuleNotFoundError: No module named 'rules'`. `ScriptContext.fire_rule`, `run_routines`, and `advance_workflow` now re-inject `_loaded_mods` into `sys.modules` before each handler call (with a `finally` cleanup), so lazy imports inside function bodies resolve correctly.
+- **System prompt** — added explicit rule 5: all imports must be at module top-level, never inside a function body; explains the runtime crash so the model understands why.
+
+### Changed
+- `scripting/context.py` — added `_inject_mods`/`_eject_mods` helpers; used in `fire_rule`, `run_routines`, and `advance_workflow` dispatch loops
+- `admin/builder.py` — system prompt extended with lazy-import prohibition and example showing the crash
+
+---
+
 ## [0.7.1] - 2026-05-24 (fix Python string safety in generated scripts)
 
 ### Fixed

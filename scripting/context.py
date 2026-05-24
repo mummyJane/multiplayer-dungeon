@@ -92,6 +92,24 @@ class ScriptContext:
 
     # ── dispatch ──────────────────────────────────────────────────────────────
 
+    def _inject_mods(self) -> list[str]:
+        """Inject _loaded_mods into sys.modules; return list of keys added."""
+        injected: list[str] = []
+        for bare_key, loaded_mod in self._loaded_mods.items():
+            if bare_key not in sys.modules:
+                sys.modules[bare_key] = loaded_mod
+                injected.append(bare_key)
+            pkg = bare_key.rsplit(".", 1)[0] if "." in bare_key else None
+            if pkg and pkg not in sys.modules:
+                sys.modules[pkg] = types.ModuleType(pkg)
+                injected.append(pkg)
+        return injected
+
+    @staticmethod
+    def _eject_mods(injected: list[str]):
+        for k in injected:
+            sys.modules.pop(k, None)
+
     async def fire_rule(self, event: str, **kwargs: Any):
         handlers = self._rules.get(event, [])
         if not handlers:
@@ -112,20 +130,26 @@ class ScriptContext:
             if player:
                 player.add_history("script", f"[{event}] {script_name}")
 
+            injected = self._inject_mods()
             try:
                 await handler(**kwargs)
             except Exception:
                 if dbg:
                     dbg.error(f"Rule handler '{script_name}' raised an exception")
                 log.exception("[%s] Rule handler error for event '%s'", self.world_id, event)
+            finally:
+                self._eject_mods(injected)
 
     async def run_routines(self, world: "WorldInstance"):
         tick = world._loop.tick_count
         for name, run_fn in self._routines:
+            injected = self._inject_mods()
             try:
                 await run_fn(world=world, tick_count=tick)
             except Exception:
                 log.exception("[%s] Routine error: %s", self.world_id, name)
+            finally:
+                self._eject_mods(injected)
 
     async def advance_workflow(self, workflow: str, **kwargs: Any):
         fn = self._workflows.get(workflow)
@@ -143,9 +167,12 @@ class ScriptContext:
         if player:
             player.add_history("script", f"[workflow:{workflow}] step={step}")
 
+        injected = self._inject_mods()
         try:
             await fn(**kwargs)
         except Exception:
             if dbg:
                 dbg.error(f"Workflow '{workflow}' raised an exception at step={step}")
             log.exception("[%s] Workflow error: %s", self.world_id, workflow)
+        finally:
+            self._eject_mods(injected)

@@ -16,14 +16,17 @@ log = logging.getLogger(__name__)
 _DATA_ROOT = Path(__file__).parent.parent / "data" / "worlds"
 
 _SYSTEM = """\
-You are a game world designer. You will receive either:
-  A) A short theme description (1-3 sentences), or
+You are a game world designer for a real-time multiplayer text RPG engine.
+You receive either:
+  A) A short theme (1–3 sentences), or
   B) A detailed world specification document.
 
-In both cases, return ONLY a valid JSON object — no markdown fences, no commentary.
-For a detailed spec, extract as much structure as possible; invent sensible defaults for anything not specified.
+Return ONLY a valid JSON object — no markdown fences, no commentary.
+For a detailed spec, extract ALL rooms and NPCs described; do not summarise or skip any.
 
-Required JSON shape:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REQUIRED JSON SHAPE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
   "config": {
     "id": "<lowercase-slug>",
@@ -33,23 +36,47 @@ Required JSON shape:
     "ollama_model": "llama3"
   },
   "zones": [
-    {"id": "<slug>", "name": "<name>", "zone_type": "outdoor|indoor|dungeon|building"}
+    {
+      "id": "<slug>",
+      "name": "<name>",
+      "zone_type": "outdoor|indoor|dungeon|building"
+    }
   ],
   "rooms": [
     {
       "id": "<slug>",
-      "name": "<name>",
+      "name": "<display name>",
       "description": "<2-3 sentences, flavourful>",
       "zone_id": "<zone id>",
-      "x": <int>, "y": <int>,
-      "exits": {"north": "<room_id>", ...},
-      "entry": true    // mark exactly ONE room as the player entry point
+      "x": <int>,
+      "y": <int>,
+      "z": <int>,           // floor level: -2=deep basement, -1=basement, 0=ground, 1=first, 2=second, 3=loft
+      "exits": {
+        "north": "<room_id>",   // optional — only include exits that exist
+        "up": "<room_id>",      // use "up"/"down" for stairs between floors
+        "down": "<room_id>"
+      },
+      "properties": {         // optional — arbitrary metadata for scripts
+        "floor": "basement",
+        "room_type": "punishment_nursery",
+        "capacity": 1
+      },
+      "entry": true           // mark exactly ONE room as the player entry point
     }
   ],
   "npcs": [
     {
-      "id": "<slug>", "name": "<name>", "description": "<sentence>",
-      "room_id": "<room_id>", "role": "<role description>"
+      "id": "<slug>",
+      "name": "<name>",
+      "description": "<1 sentence>",
+      "room_id": "<room_id>",
+      "dialogue": ["<line>", "..."],
+      "properties": {         // optional — scheduling and role metadata for scripts
+        "role": "head_nanny",
+        "shift": "day",       // day | night | swing
+        "shift_start": "07:00",
+        "shift_end": "19:00"
+      }
     }
   ],
   "monsters": [
@@ -63,26 +90,61 @@ Required JSON shape:
     {
       "id": "<slug>", "name": "<name>", "description": "<sentence>",
       "item_type": "clothing|consumable|misc|weapon|armour",
-      "room_id": "<room_id or null>"
+      "room_id": "<room_id or null>",
+      "properties": {}
     }
   ],
-  "rules_script": "<full Python source for rules/generated.py>",
+  "rules_script":    "<full Python source for rules/generated.py>",
   "routines_script": "<full Python source for routines/generated.py>",
   "workflows_script": "<full Python source for workflows/generated.py>"
 }
 
-Python script conventions:
-  rules/generated.py    — define async functions named on_<event>(player, room, world)
-                          Common events: player_enter, player_leave, player_action
-  routines/generated.py — define async run(world, tick_count)
-                          Use tick_count % N to run every N ticks
-  workflows/generated.py — define async on_progress(player, step, world)
-                          and a list STEPS = [...]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MAP LAYOUT RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Each room may have at most ONE exit per direction (north/south/east/west/up/down/in/out).
+- Stairs/lifts connect floors: the lower room has "up" and the upper room has "down".
+- Use hallway rooms to branch corridors rather than giving one room many exits.
+- Set z correctly: -1 for basement, 0 for ground, 1 for first floor, 2 for second, 3 for loft, etc.
+- x/y give the 2-D position on that floor; they can repeat across floors (floors are independent planes).
+- If the spec says "max 1 north, 1 south, 1 east, 1 west, 1 up, 1 down" enforce that strictly.
+- If a spec lists a numbered set of rooms (e.g. "4 punishment nurseries") generate every one with unique IDs
+  like punishment_nursery_1, punishment_nursery_2, etc.
 
-For a detailed spec document, generate MEANINGFUL scripts that actually implement
-the described rules, schedules, and progression systems — not empty stubs.
-Use world.players, world.npcs, world.map, world.sessions, world.scripts as needed.
-Player objects have: id, name, room_id, hp, inventory, and a __dict__ for custom flags.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCRIPTING CONVENTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Rules (rules/generated.py):
+  - async functions named on_<event>(player, room, world, **kwargs)
+  - Common events: player_enter, player_leave, player_action
+  - Use player.flags (a plain dict) to track per-player state:
+      player.flags["tag"] = "bad"
+      player.flags["punishment_until"] = tick_count + 20
+      player.flags.get("level", "yourself")
+  - Use room.properties to read room metadata:
+      if room.properties.get("room_type") == "punishment_nursery": ...
+  - Call world.sessions.send(player.session_id, {"type": "message", "text": "..."})
+    to narrate an event to a specific player.
+
+Routines (routines/generated.py):
+  - async run(world, tick_count)
+  - Use tick_count % N to run every N ticks (tick ≈ 3 s at idle, ≈ 0.5 s at peak)
+  - NPC shift scheduling: read npc.properties["shift"] to decide movement.
+  - Move an NPC: npc.room_id = new_room_id (also update room entity_ids).
+  - Send a room-wide message:
+      for sid, pid in list(world.sessions._sessions.items()):
+          p = world.players.get(pid)
+          if p and p.room_id == room_id:
+              await world.sessions.send(sid, {"type": "message", "text": "..."})
+
+Workflows (workflows/generated.py):
+  - STEPS = ["step_one", "step_two", ...]
+  - async on_progress(player, step, world, **kwargs)
+  - Triggered by scripts calling world.scripts.advance_workflow(wf_name, player=player, step=..., world=world)
+
+For a detailed spec, write MEANINGFUL scripts that implement the described rules.
+Use player.flags extensively for state machines (punishment levels, tags, room assignments, timers).
+Implement all unique schedules, rules, and progression systems mentioned in the spec.
 """
 
 
@@ -91,7 +153,7 @@ async def build_world(spec_text: str) -> dict:
     client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
     msg = await client.messages.create(
         model="claude-opus-4-7",
-        max_tokens=8192,
+        max_tokens=16384,
         system=_SYSTEM,
         messages=[{"role": "user", "content": spec_text}],
     )
@@ -141,10 +203,13 @@ def materialise_world(data: dict) -> Path:
     entry_room_id = None
     for r in data.get("rooms", []):
         exits_repr = repr(r.get("exits", {}))
+        props_repr = repr(r.get("properties", {}))
+        z_val = r.get("z", 0)
         lines.append(
             f"    world.map.add_room(Room(id={r['id']!r}, name={r['name']!r}, "
             f"description={r['description']!r}, zone_id={r['zone_id']!r}, "
-            f"x={r.get('x', 0)}, y={r.get('y', 0)}, exits={exits_repr}))"
+            f"x={r.get('x', 0)}, y={r.get('y', 0)}, z={z_val}, "
+            f"exits={exits_repr}, properties={props_repr}))"
         )
         if r.get("entry"):
             entry_room_id = r["id"]
@@ -153,10 +218,11 @@ def materialise_world(data: dict) -> Path:
 
     for n in data.get("npcs", []):
         dialogue_repr = repr(n.get("dialogue", []))
+        props_repr = repr(n.get("properties", {}))
         lines.append(
             f"    world.npcs[{n['id']!r}] = NPC(id={n['id']!r}, name={n['name']!r}, "
             f"description={n['description']!r}, room_id={n['room_id']!r}, "
-            f"dialogue={dialogue_repr})"
+            f"dialogue={dialogue_repr}, properties={props_repr})"
         )
 
     for m in data.get("monsters", []):
@@ -168,12 +234,13 @@ def materialise_world(data: dict) -> Path:
         )
 
     for item in data.get("items", []):
-        room_id = item.get("room_id") or "None"
+        props_repr = repr(item.get("properties", {}))
         room_arg = f"room_id={item['room_id']!r}" if item.get("room_id") else "room_id=None"
         lines.append(
             f"    world.items[{item['id']!r}] = Item(id={item['id']!r}, "
             f"name={item['name']!r}, description={item['description']!r}, "
-            f"item_type={item.get('item_type','misc')!r}, {room_arg})"
+            f"item_type={item.get('item_type', 'misc')!r}, {room_arg}, "
+            f"properties={props_repr})"
         )
 
     (world_dir / "seed.py").write_text("\n".join(lines), encoding="utf-8")

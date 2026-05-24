@@ -10,7 +10,9 @@ class Room:
     zone_id: str
     x: int
     y: int
-    # cardinal exits: direction -> room_id
+    z: int = 0     # floor level: negative=basement, 0=ground, positive=upper floors
+    # cardinal + vertical exits: direction -> room_id
+    # directions: north south east west up down in out
     exits: dict[str, str] = field(default_factory=dict)
     # ids of entities currently in this room
     entity_ids: list[str] = field(default_factory=list)

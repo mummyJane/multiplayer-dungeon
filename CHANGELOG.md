@@ -4,6 +4,22 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.6.1] - 2026-05-24 (multi-floor building support for world builder)
+
+### Added
+- `world/room.py` — `z: int = 0` floor-level coordinate on `Room` (negative = basement, 0 = ground, positive = upper floors). Exits already support `up`/`down`; `z` makes the floor explicit for scripts and the GM.
+
+### Changed
+- `admin/builder.py` system prompt rewritten to handle complex building specs:
+  - Full map-layout rules: hallway-per-direction constraint, `z` encoding, `up`/`down` stair exits, numbered room sets (e.g. "4 punishment nurseries" → 4 separate rooms)
+  - `room.properties` and `npc.properties` now documented and used by the builder for metadata (floor name, room type, capacity, NPC role, shift times)
+  - `player.flags` guidance added for implementing state-machine rules (punishment tags, levels, timed constraints)
+  - Routine shift-scheduling pattern shown (read `npc.properties["shift"]`, broadcast to a room)
+- `admin/builder.py` `materialise_world()` now writes `z=`, `room.properties=`, `npc.properties=`, and `item.properties=` into the generated `seed.py`
+- `admin/builder.py` `max_tokens` raised from 8192 → 16384 to accommodate large multi-room worlds
+
+---
+
 ## [0.6.0] - 2026-05-24 (player accounts, data repos, backups)
 
 ### Added

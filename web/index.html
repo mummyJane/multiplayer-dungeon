@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="room-panel">
+      <h2 id="room-name">...</h2>
+      <p id="room-desc"></p>
+      <div id="exits-bar">Exits: <span id="exits"></span></div>
+      <div id="players-bar" hidden>Also here: <span id="players-here"></span></div>
+    </div>
+
+    <div id="output-panel">
+      <div id="messages"></div>
+    </div>
+
+    <div id="input-panel">
+      <input id="cmd-input" type="text" placeholder="What do you do?" autocomplete="off" autofocus>
+      <button id="cmd-send">Send</button>
+    </div>
+
+    <div id="connect-overlay">
+      <div id="connect-box">
+        <h1>Dungeon</h1>
+        <p>Enter your name to begin</p>
+        <input id="name-input" type="text" maxlength="24" placeholder="Name..." autocomplete="off">
+        <button id="connect-btn">Enter</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

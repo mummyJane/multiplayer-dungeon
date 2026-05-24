@@ -17,3 +17,6 @@ node_modules/
 Thumbs.db
 logs/
 .claude/
+.server.pid
+.restart.flag
+.stop.flag

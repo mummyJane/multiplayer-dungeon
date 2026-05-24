@@ -4,6 +4,18 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.5.2] - 2026-05-24 (stop and restart)
+
+### Added
+- `stop.py` — writes `.stop.flag`; `start.py` sees it within 0.5 s, terminates uvicorn cleanly, and exits. Falls back to `os.kill(SIGTERM)` if the server hasn't stopped after 8 s
+- `restart.py` — sets `.restart.flag`, signals the current uvicorn process to exit; `start.py`'s poll loop detects the flag and immediately relaunches uvicorn without re-running pre-flight checks. Waits up to 10 s for the new PID and confirms
+- `.server.pid`, `.restart.flag`, `.stop.flag` added to `.gitignore`
+
+### Changed
+- `start.py` — replaced `os.execv` with `subprocess.Popen` + a poll loop so the process stays alive across restarts. Writes `.server.pid` on each launch; clears it on exit. Checks `.stop.flag` and `.restart.flag` every 0.5 s
+
+---
+
 ## [0.5.1] - 2026-05-24 (fix setup.py UnicodeDecodeError on Windows)
 
 ### Fixed

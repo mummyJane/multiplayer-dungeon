@@ -1,0 +1,72 @@
+/* Admin-specific styles — extends style.css */
+
+#admin-app { max-width: 960px; margin: 2rem auto; padding: 0 1.25rem; }
+
+#admin-app header {
+  display: flex; align-items: center; gap: 1rem;
+  margin-bottom: 2rem; flex-wrap: wrap;
+}
+#admin-app header h1 { color: var(--accent); font-size: 1.5rem; flex: 1; }
+#auth-bar { display: flex; gap: .5rem; align-items: center; }
+#auth-bar input { width: 200px; }
+#auth-status { font-size: 12px; }
+#auth-status.ok  { color: var(--accent); }
+#auth-status.err { color: var(--error); }
+
+#admin-app section {
+  margin-bottom: 2.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+}
+#admin-app h2 {
+  color: var(--accent); font-size: 1rem;
+  margin-bottom: .9rem;
+}
+#admin-app h3 { color: var(--muted); font-size: .85rem; margin: 1rem 0 .5rem; }
+
+/* worlds table */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: .45rem .75rem; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: normal; }
+td:last-child { white-space: nowrap; }
+td.muted { color: var(--muted); font-style: italic; }
+
+/* tabs */
+.tab-bar { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--muted); font-family: var(--font); font-size: 13px;
+  padding: .4rem 1rem; cursor: pointer; margin-bottom: -1px;
+}
+.tab:hover  { color: var(--text); border-color: var(--border); }
+.tab.active { color: var(--accent); border-color: var(--accent); }
+
+/* spec textarea */
+#spec-input { width: 100%; resize: vertical; margin-bottom: .6rem; }
+
+/* drop zone */
+#drop-zone {
+  border: 1px dashed var(--border); padding: 2rem;
+  text-align: center; cursor: pointer; margin-bottom: .6rem;
+  transition: border-color .15s;
+}
+#drop-zone:hover, #drop-zone.drag-over { border-color: var(--accent); }
+#drop-label { color: var(--muted); font-size: 13px; }
+#file-name  { font-size: 12px; margin-bottom: .5rem; min-height: 1.2em; }
+
+/* generate status */
+#generate-status {
+  margin-top: .75rem; font-size: 13px; padding: .5rem .75rem;
+  border: 1px solid var(--border);
+}
+#generate-status.working { color: var(--muted); border-color: var(--border); }
+#generate-status.success { color: var(--accent); border-color: var(--accent); }
+#generate-status.error   { color: var(--error);  border-color: var(--error); }
+
+/* preview */
+#generate-preview { margin-top: 1rem; }
+
+/* manual form */
+.form-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.form-row input { flex: 1; min-width: 140px; }
+#manual-status { margin-top: .5rem; font-size: 13px; }

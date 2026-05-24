@@ -4,6 +4,20 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.4.0] - 2026-05-24 (paste/upload world spec)
+
+### Added
+- `POST /admin/worlds/upload` — accepts a multipart file upload (UTF-8 text, max 512 KB) and feeds it to the Claude world builder; same live-load flow as the paste path
+- `web/css/admin.css` — admin-specific styles extracted from style.css
+- Admin panel now has two tabs: "Paste spec / theme" (textarea) and "Upload file" (drag-and-drop or browse); both show a result preview table (world ID, name, rooms, NPCs, items)
+
+### Changed
+- `admin/builder.py` — switched to `AsyncAnthropic` client; updated system prompt to handle both short themes and long detailed spec documents; `max_tokens` raised to 8192; now generates `rules_script`, `routines_script`, AND `workflows_script`; `materialise_world` writes all three and also seeds `items` from the JSON
+- `admin/routes.py` — `GenerateRequest` replaces `CreateWorldRequest` (field renamed `theme` → `text`); shared `_build_and_load()` helper used by both paste and upload endpoints; response now includes room/NPC/item counts
+- `web/admin.html` — restructured around the two tabs; added result preview panel
+
+---
+
 ## [0.3.1] - 2026-05-24 (local venv)
 
 ### Changed

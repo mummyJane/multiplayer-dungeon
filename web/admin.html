@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — Dungeon</title>
   <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/admin.css">
 </head>
 <body>
   <div id="admin-app">
@@ -17,31 +18,75 @@
       </div>
     </header>
 
-    <section id="worlds-section">
+    <!-- Active worlds -->
+    <section>
       <h2>Active Worlds</h2>
       <table id="worlds-table">
-        <thead><tr><th>ID</th><th>Name</th><th>Players</th><th>Actions</th></tr></thead>
-        <tbody id="worlds-tbody"></tbody>
+        <thead>
+          <tr><th>ID</th><th>Name</th><th>Description</th><th>Players</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="worlds-tbody"><tr><td colspan="5" class="muted">Authenticate to view worlds.</td></tr></tbody>
       </table>
     </section>
 
-    <section id="generate-section">
-      <h2>Generate World with Claude</h2>
-      <p class="muted">Describe a theme — Claude will generate rooms, NPCs, monsters, and starter scripts.</p>
-      <textarea id="theme-input" rows="4" placeholder="e.g. A sunken elven city beneath a frozen lake, haunted by ice wraiths…"></textarea>
-      <button id="generate-btn">Generate World</button>
-      <div id="generate-status"></div>
+    <!-- Generate / Upload -->
+    <section>
+      <h2>Create World with Claude</h2>
+
+      <!-- tab bar -->
+      <div class="tab-bar">
+        <button class="tab active" data-tab="paste">Paste spec / theme</button>
+        <button class="tab" data-tab="upload">Upload file</button>
+      </div>
+
+      <!-- paste tab -->
+      <div class="tab-panel" id="tab-paste">
+        <p class="muted">
+          Paste a short theme ("a sunken elven city…") or a full detailed world specification document.
+        </p>
+        <textarea id="spec-input" rows="12"
+          placeholder="Describe the world — a couple of sentences for a quick theme, or paste a full spec document for a detailed build…"></textarea>
+        <button id="generate-btn">Generate World</button>
+      </div>
+
+      <!-- upload tab -->
+      <div class="tab-panel hidden" id="tab-upload">
+        <p class="muted">
+          Upload a plain-text (.txt, .md) spec file. UTF-8, max 512 KB.
+        </p>
+        <div id="drop-zone">
+          <span id="drop-label">Drop a file here, or click to browse</span>
+          <input id="file-input" type="file" accept=".txt,.md,.text" hidden>
+        </div>
+        <div id="file-name" class="muted"></div>
+        <button id="upload-btn" disabled>Generate from File</button>
+      </div>
+
+      <!-- shared status -->
+      <div id="generate-status" class="hidden"></div>
+
+      <!-- preview of generated world -->
+      <div id="generate-preview" class="hidden">
+        <h3>Generated</h3>
+        <table>
+          <thead><tr><th>ID</th><th>Name</th><th>Rooms</th><th>NPCs</th><th>Items</th></tr></thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+      </div>
     </section>
 
-    <section id="manual-section">
+    <!-- Manual create -->
+    <section>
       <h2>Create Blank World</h2>
+      <p class="muted">Creates an empty world — add rooms and scripts by hand in data/worlds/&lt;id&gt;/.</p>
       <div class="form-row">
-        <input id="manual-id" type="text" placeholder="world-id (slug)">
+        <input id="manual-id"   type="text" placeholder="world-id (slug)">
         <input id="manual-name" type="text" placeholder="Display Name">
         <button id="manual-btn">Create</button>
       </div>
       <div id="manual-status"></div>
     </section>
+
   </div>
 
   <script src="/static/js/admin.js"></script>

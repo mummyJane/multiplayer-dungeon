@@ -56,6 +56,7 @@ async function loadWorlds() {
       <td class="muted">${w.description || "—"}</td>
       <td>${w.players}/${w.max_players}</td>
       <td>
+        <button onclick="openWorldEditor('${w.id}')">Edit</button>
         <button onclick="reloadScripts('${w.id}')">Reload scripts</button>
         <button onclick="removeWorld('${w.id}')" class="muted">Delete</button>
       </td>
@@ -216,6 +217,172 @@ $("upload-btn").addEventListener("click", async () => {
     }
   } catch (e) {
     setStatus("✗ Upload failed.", "error");
+  }
+});
+
+// ── world editor ─────────────────────────────────────────────────────────────
+
+let editorWorldId = null;
+let editorScripts = { rules: "", routines: "", workflows: "" };
+let editorActiveScat = "rules";
+
+// editor tab switching
+document.querySelectorAll(".etab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".etab").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".etab-panel").forEach(p => p.classList.add("hidden"));
+    btn.classList.add("active");
+    $("etab-" + btn.dataset.etab).classList.remove("hidden");
+  });
+});
+
+// script category switching
+document.querySelectorAll(".scat").forEach(btn => {
+  btn.addEventListener("click", () => {
+    // save current textarea content before switching
+    editorScripts[editorActiveScat] = $("script-editor").value;
+    document.querySelectorAll(".scat").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    editorActiveScat = btn.dataset.scat;
+    $("script-editor").value = editorScripts[editorActiveScat];
+    $("ed-scripts-status").textContent = "";
+  });
+});
+
+// Tab key inserts spaces in the script editor
+$("script-editor").addEventListener("keydown", e => {
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const ta = $("script-editor");
+    const s = ta.selectionStart, en = ta.selectionEnd;
+    ta.value = ta.value.substring(0, s) + "    " + ta.value.substring(en);
+    ta.selectionStart = ta.selectionEnd = s + 4;
+  }
+});
+
+async function openWorldEditor(worldId) {
+  editorWorldId = worldId;
+  $("world-editor").classList.remove("hidden");
+  $("editor-title").textContent = `Editing: ${worldId}`;
+  $("ed-config-status").textContent = "";
+  $("ed-scripts-status").textContent = "";
+
+  // reset to overview tab
+  document.querySelectorAll(".etab").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".etab-panel").forEach(p => p.classList.add("hidden"));
+  document.querySelector(".etab[data-etab='overview']").classList.add("active");
+  $("etab-overview").classList.remove("hidden");
+
+  // load detail + scripts in parallel
+  const [detailRes, scriptsRes] = await Promise.all([
+    fetch(`/admin/worlds/${worldId}/detail`, { headers: authHeaders() }),
+    fetch(`/admin/worlds/${worldId}/scripts`, { headers: authHeaders() }),
+  ]);
+
+  if (!detailRes.ok || !scriptsRes.ok) {
+    alert("Failed to load world data.");
+    return;
+  }
+  const detail  = await detailRes.json();
+  const scripts = await scriptsRes.json();
+
+  // populate config
+  $("ed-name").value       = detail.config.name;
+  $("ed-desc").value       = detail.config.description;
+  $("ed-model").value      = detail.config.ollama_model;
+  $("ed-maxplayers").value = detail.config.max_players;
+
+  // populate rooms table
+  $("ed-rooms-count").textContent = `${detail.rooms.length} rooms`;
+  $("ed-rooms-table").querySelector("tbody").innerHTML = detail.rooms.map(r => {
+    const exits = Object.entries(r.exits).map(([d,t]) => `${d}→${t}`).join(", ") || "—";
+    const rtype = r.properties?.room_type || "—";
+    return `<tr>
+      <td class="mono">${r.id}</td>
+      <td>${r.name}</td>
+      <td class="center">${r.z}</td>
+      <td class="muted">${r.zone_id}</td>
+      <td class="muted">${rtype}</td>
+      <td class="muted small">${exits}</td>
+    </tr>`;
+  }).join("");
+
+  // populate npcs table
+  $("ed-npcs-count").textContent = `${detail.npcs.length} NPCs`;
+  $("ed-npcs-table").querySelector("tbody").innerHTML = detail.npcs.map(n => {
+    const role  = n.properties?.role  || "—";
+    const shift = n.properties?.shift
+      ? `${n.properties.shift} ${n.properties.shift_start||""}–${n.properties.shift_end||""}`
+      : "—";
+    return `<tr>
+      <td class="mono">${n.id}</td>
+      <td>${n.name}</td>
+      <td class="muted small">${n.description}</td>
+      <td class="mono muted">${n.room_id}</td>
+      <td class="muted">${role}</td>
+      <td class="muted">${shift}</td>
+    </tr>`;
+  }).join("");
+
+  // load scripts into editor state
+  editorScripts   = { rules: scripts.rules || "", routines: scripts.routines || "", workflows: scripts.workflows || "" };
+  editorActiveScat = "rules";
+  document.querySelectorAll(".scat").forEach(b => b.classList.remove("active"));
+  document.querySelector(".scat[data-scat='rules']").classList.add("active");
+  $("script-editor").value = editorScripts.rules;
+
+  $("world-editor").scrollIntoView({ behavior: "smooth" });
+}
+
+$("ed-close").addEventListener("click", () => {
+  $("world-editor").classList.add("hidden");
+  editorWorldId = null;
+});
+
+$("ed-save-config").addEventListener("click", async () => {
+  if (!editorWorldId) return;
+  const body = {
+    name:        $("ed-name").value.trim(),
+    description: $("ed-desc").value.trim(),
+    ollama_model:$("ed-model").value.trim(),
+    max_players: parseInt($("ed-maxplayers").value, 10) || 0,
+  };
+  const res  = await fetch(`/admin/worlds/${editorWorldId}/config`, {
+    method: "PATCH",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  const el = $("ed-config-status");
+  if (res.ok) {
+    el.textContent = `✓ Saved (${data.name})`;
+    el.className = "ok";
+    loadWorlds();
+  } else {
+    el.textContent = `✗ ${data.detail || "Error"}`;
+    el.className = "err";
+  }
+});
+
+$("ed-save-scripts").addEventListener("click", async () => {
+  if (!editorWorldId) return;
+  // capture current textarea before sending
+  editorScripts[editorActiveScat] = $("script-editor").value;
+
+  const res = await fetch(`/admin/worlds/${editorWorldId}/scripts`, {
+    method: "PUT",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(editorScripts),
+  });
+  const data = await res.json();
+  const el = $("ed-scripts-status");
+  if (res.ok) {
+    const errs = data.errors?.length ? `  ⚠ ${data.errors.join("; ")}` : "";
+    el.textContent = `✓ Saved ${data.saved.join(", ")} — scripts reloaded${errs}`;
+    el.className = data.errors?.length ? "warn" : "ok";
+  } else {
+    el.textContent = `✗ ${data.detail || "Error"}`;
+    el.className = "err";
   }
 });
 

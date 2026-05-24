@@ -80,6 +80,48 @@ td.muted { color: var(--muted); font-style: italic; }
 /* colour the log verb prefixes */
 #build-log { color: #9a9a9a; }
 
+/* world editor panel */
+#world-editor { background: #0f0f0f; border: 1px solid var(--accent); padding: 1.25rem; }
+#editor-title { color: var(--accent); font-size: 1rem; margin-bottom: .9rem; }
+
+/* editor tabs (same style as main tabs but prefixed .etab) */
+.etab-panel { margin-top: .75rem; }
+
+/* config form grid */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem 1.25rem; margin-bottom: .75rem; }
+.form-grid label { display: flex; flex-direction: column; gap: .25rem; font-size: 12px; color: var(--muted); }
+.form-grid input { width: 100%; }
+
+/* status chips */
+.ok   { color: var(--accent); font-size: 12px; margin-left: .6rem; }
+.err  { color: var(--error);  font-size: 12px; margin-left: .6rem; }
+.warn { color: #bf9f3f;       font-size: 12px; margin-left: .6rem; }
+
+/* scrollable table wrapper */
+.scroll-table { max-height: 320px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--border); }
+.scroll-table table { width: 100%; }
+
+/* table cell helpers */
+td.mono  { font-family: var(--font); font-size: 12px; }
+td.small { font-size: 11px; }
+td.center{ text-align: center; }
+
+/* script editor */
+.script-cat-bar { margin-bottom: .5rem; }
+.script-cat-bar .scat { background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--muted); font-family: var(--font); font-size: 12px; padding: .3rem .8rem; margin-bottom: -1px; cursor: pointer; }
+.script-cat-bar .scat:hover  { color: var(--text); }
+.script-cat-bar .scat.active { color: var(--accent); border-color: var(--accent); }
+
+#script-editor {
+  width: 100%; resize: vertical;
+  background: #060606; border: 1px solid var(--border);
+  color: #c8e0c8; font-family: "Courier New", Courier, monospace; font-size: 12px;
+  line-height: 1.55; padding: .6rem .75rem; outline: none; tab-size: 4;
+}
+#script-editor:focus { border-color: var(--accent); }
+.script-actions { display: flex; align-items: center; margin-top: .5rem; gap: .5rem; }
+
 /* manual form */
 .form-row { display: flex; gap: .5rem; flex-wrap: wrap; }
 .form-row input { flex: 1; min-width: 140px; }

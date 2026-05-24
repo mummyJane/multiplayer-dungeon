@@ -29,6 +29,77 @@
       </table>
     </section>
 
+    <!-- World editor (shown when a world row is clicked) -->
+    <section id="world-editor" class="hidden">
+      <h2 id="editor-title">Editing: —</h2>
+
+      <div class="tab-bar">
+        <button class="etab active" data-etab="overview">Overview</button>
+        <button class="etab" data-etab="rooms">Rooms</button>
+        <button class="etab" data-etab="npcs">NPCs</button>
+        <button class="etab" data-etab="scripts">Scripts</button>
+      </div>
+
+      <!-- overview tab -->
+      <div class="etab-panel" id="etab-overview">
+        <div class="form-grid">
+          <label>Name<input id="ed-name" type="text" maxlength="60"></label>
+          <label>Description<input id="ed-desc" type="text" maxlength="200"></label>
+          <label>Ollama model<input id="ed-model" type="text" maxlength="40"></label>
+          <label>Max players<input id="ed-maxplayers" type="number" min="1" max="500"></label>
+        </div>
+        <button id="ed-save-config">Save Config</button>
+        <span id="ed-config-status" class="muted"></span>
+      </div>
+
+      <!-- rooms tab -->
+      <div class="etab-panel hidden" id="etab-rooms">
+        <p class="muted" id="ed-rooms-count"></p>
+        <div class="scroll-table">
+          <table id="ed-rooms-table">
+            <thead><tr>
+              <th>ID</th><th>Name</th><th>Floor&nbsp;z</th><th>Zone</th>
+              <th>Type</th><th>Exits</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- npcs tab -->
+      <div class="etab-panel hidden" id="etab-npcs">
+        <p class="muted" id="ed-npcs-count"></p>
+        <div class="scroll-table">
+          <table id="ed-npcs-table">
+            <thead><tr>
+              <th>ID</th><th>Name</th><th>Description</th>
+              <th>Room</th><th>Role</th><th>Shift</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- scripts tab -->
+      <div class="etab-panel hidden" id="etab-scripts">
+        <div class="tab-bar script-cat-bar">
+          <button class="scat active" data-scat="rules">Rules</button>
+          <button class="scat" data-scat="routines">Routines</button>
+          <button class="scat" data-scat="workflows">Workflows</button>
+        </div>
+        <p class="muted">Editing <code>scripts/&lt;category&gt;/generated.py</code> — save reloads automatically.</p>
+        <textarea id="script-editor" spellcheck="false" wrap="off" rows="28"></textarea>
+        <div class="script-actions">
+          <button id="ed-save-scripts">Save &amp; Reload</button>
+          <span id="ed-scripts-status" class="muted"></span>
+        </div>
+      </div>
+
+      <div style="margin-top:1rem">
+        <button id="ed-close" class="muted">Close editor</button>
+      </div>
+    </section>
+
     <!-- Generate / Upload -->
     <section>
       <h2>Create World with Claude</h2>

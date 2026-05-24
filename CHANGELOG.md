@@ -4,6 +4,18 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.6.5] - 2026-05-24 (world editor in admin panel)
+
+### Added
+- **World editor panel** in `/admin` — click **Edit** on any world row to open an inline editor with four tabs:
+  - **Overview** — edit world name, description, Ollama model, and max players; Save Config persists to `config.json`
+  - **Rooms** — scrollable table of all rooms sorted by floor (`z`), showing ID, name, floor level, zone, room type (from `properties`), and exits
+  - **NPCs** — scrollable table showing ID, name, description, room, role, and shift schedule (from `properties`)
+  - **Scripts** — three-tab code editor (Rules / Routines / Workflows); edits `scripts/<category>/generated.py`; Save & Reload writes the file and reloads all scripts in the live world; Tab key inserts 4 spaces
+- `admin/routes.py` — `GET /admin/worlds/{id}/detail`, `GET /admin/worlds/{id}/scripts`, `PUT /admin/worlds/{id}/scripts`, `PATCH /admin/worlds/{id}/config`
+
+---
+
 ## [0.6.4] - 2026-05-24 (JSON repair pipeline for world builder)
 
 ### Added

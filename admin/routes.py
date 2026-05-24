@@ -7,6 +7,8 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from pathlib import Path
 
+_DATA_ROOT = Path(__file__).parent.parent / "data" / "worlds"
+
 log = logging.getLogger(__name__)
 admin_router = APIRouter(prefix="/admin")
 
@@ -34,6 +36,19 @@ class WorldConfigRequest(BaseModel):
     description: str = ""
     max_players: int = 50
     ollama_model: str = "llama3"
+
+
+class ConfigPatch(BaseModel):
+    name: str = ""
+    description: str = ""
+    max_players: int = 0
+    ollama_model: str = ""
+
+
+class ScriptsSave(BaseModel):
+    rules: str = ""
+    routines: str = ""
+    workflows: str = ""
 
 
 # ── shared world-creation helper ──────────────────────────────────────────────
@@ -209,7 +224,130 @@ async def reload_scripts(world_id: str, _=Depends(_require_admin)):
     world = registry.get(world_id)
     if world is None:
         raise HTTPException(404, "World not found")
-    scripts_dir = Path(__file__).parent.parent / "data" / "worlds" / world_id / "scripts"
+    scripts_dir = _DATA_ROOT / world_id / "scripts"
     world.scripts = ScriptContext(world_id)
     world.scripts.load(scripts_dir)
     return {"reloaded": world_id}
+
+
+# ── world detail (view) ───────────────────────────────────────────────────────
+
+@admin_router.get("/worlds/{world_id}/detail")
+async def world_detail(world_id: str, _=Depends(_require_admin)):
+    from api.state import registry
+    world = registry.get(world_id)
+    if world is None:
+        raise HTTPException(404, "World not found")
+
+    rooms = [
+        {
+            "id":          r.id,
+            "name":        r.name,
+            "description": r.description[:120] + ("…" if len(r.description) > 120 else ""),
+            "zone_id":     r.zone_id,
+            "x": r.x, "y": r.y, "z": r.z,
+            "exits":       r.exits,
+            "properties":  r.properties,
+        }
+        for r in sorted(world.map._rooms.values(), key=lambda r: (r.z, r.y, r.x))
+    ]
+    npcs = [
+        {
+            "id":          n.id,
+            "name":        n.name,
+            "description": n.description,
+            "room_id":     n.room_id,
+            "properties":  n.properties,
+        }
+        for n in sorted(world.npcs.values(), key=lambda n: n.name)
+    ]
+    items = [
+        {"id": i.id, "name": i.name, "item_type": i.item_type, "room_id": i.room_id}
+        for i in sorted(world.items.values(), key=lambda i: i.name)
+    ]
+    return {
+        "config": {
+            "id":          world.config.id,
+            "name":        world.config.name,
+            "description": world.config.description,
+            "max_players": world.config.max_players,
+            "ollama_model":world.config.ollama_model,
+        },
+        "rooms":        rooms,
+        "npcs":         npcs,
+        "items":        items,
+        "player_count": world.player_count,
+    }
+
+
+# ── script view / edit ────────────────────────────────────────────────────────
+
+@admin_router.get("/worlds/{world_id}/scripts")
+async def get_scripts(world_id: str, _=Depends(_require_admin)):
+    """Return content of generated.py for each script category."""
+    scripts_dir = _DATA_ROOT / world_id / "scripts"
+    result = {}
+    for cat in ("rules", "routines", "workflows"):
+        path = scripts_dir / cat / "generated.py"
+        result[cat] = path.read_text(encoding="utf-8") if path.exists() else ""
+    return result
+
+
+@admin_router.put("/worlds/{world_id}/scripts")
+async def save_scripts(world_id: str, req: ScriptsSave, _=Depends(_require_admin)):
+    """Write one or more generated.py files then reload scripts."""
+    from api.state import registry
+    from scripting.context import ScriptContext
+
+    scripts_dir = _DATA_ROOT / world_id / "scripts"
+    saved = []
+    errors = []
+
+    for cat, source in [("rules", req.rules), ("routines", req.routines),
+                        ("workflows", req.workflows)]:
+        if not source.strip():
+            continue
+        path = scripts_dir / cat / "generated.py"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            path.write_text(source, encoding="utf-8")
+            saved.append(f"{cat}/generated.py")
+        except Exception as exc:
+            errors.append(f"{cat}: {exc}")
+
+    world = registry.get(world_id)
+    reloaded = False
+    if world and saved:
+        world.scripts = ScriptContext(world_id)
+        try:
+            world.scripts.load(scripts_dir)
+            reloaded = True
+        except Exception as exc:
+            errors.append(f"reload: {exc}")
+
+    return {"saved": saved, "reloaded": reloaded, "errors": errors}
+
+
+# ── config patch ──────────────────────────────────────────────────────────────
+
+@admin_router.patch("/worlds/{world_id}/config")
+async def patch_config(world_id: str, req: ConfigPatch, _=Depends(_require_admin)):
+    from api.state import registry
+    from gm.interpreter import GMInterpreter
+
+    world = registry.get(world_id)
+    if world is None:
+        raise HTTPException(404, "World not found")
+
+    if req.name:
+        world.config.name = req.name
+    if req.description is not None and req.description != "":
+        world.config.description = req.description
+    if req.max_players > 0:
+        world.config.max_players = req.max_players
+    if req.ollama_model:
+        world.config.ollama_model = req.ollama_model
+        world.gm = GMInterpreter(model=req.ollama_model)
+
+    registry.save_config(world)
+    return {"updated": world_id, "name": world.config.name}

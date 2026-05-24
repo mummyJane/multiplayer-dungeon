@@ -7,39 +7,39 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from entities.player import Player
+    from worlds.instance import WorldInstance
 
 log = logging.getLogger(__name__)
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "llama3"
 
-# Scripted command patterns checked before calling the LLM
 _DIRECTIONS = {"north", "south", "east", "west", "up", "down", "n", "s", "e", "w", "u", "d"}
 _DIR_MAP = {"n": "north", "s": "south", "e": "east", "w": "west", "u": "up", "d": "down"}
+_REVERSE_DIR = {"north": "south", "south": "north", "east": "west", "west": "east"}
 
 
 class GMInterpreter:
     def __init__(self, model: str = OLLAMA_MODEL):
         self._model = model
 
-    async def handle(self, player: "Player", text: str, game_state) -> str:
+    async def handle(self, player: "Player", text: str, world: "WorldInstance") -> str:
         words = text.lower().split()
         if not words:
             return "Hmm?"
 
-        # --- scripted fast path ---
         verb = words[0]
 
         if verb in _DIRECTIONS or (verb == "go" and len(words) > 1 and words[1] in _DIRECTIONS):
             direction = _DIR_MAP.get(verb, verb) if verb != "go" else _DIR_MAP.get(words[1], words[1])
-            return await self._move(player, direction, game_state)
+            return await self._move(player, direction, world)
 
         if verb in ("look", "l"):
-            return await self._look(player, game_state)
+            return await self._look(player, world)
 
         if verb in ("say", "shout", "yell") and len(words) > 1:
             message = " ".join(words[1:])
-            await game_state.sessions.broadcast(
+            await world.sessions.broadcast(
                 {"type": "message", "text": f'{player.name} says: "{message}"'},
                 exclude=player.session_id,
             )
@@ -48,41 +48,56 @@ class GMInterpreter:
         if verb in ("quit", "exit", "logout"):
             return "Use the browser close button to disconnect."
 
-        # --- LLM fallback ---
-        return await self._llm_handle(player, text, game_state)
+        return await self._llm_handle(player, text, world)
 
-    async def _move(self, player: "Player", direction: str, game_state) -> str:
-        room = game_state.world.move(player.room_id, direction)
+    async def _move(self, player: "Player", direction: str, world: "WorldInstance") -> str:
+        room = world.map.move(player.room_id, direction)
         if room is None:
             return f"You can't go {direction} from here."
-        old_room = game_state.world.get_room(player.room_id)
+        old_room = world.map.get_room(player.room_id)
         if old_room:
             old_room.remove_entity(player.id)
         player.move_to(room.id)
         room.add_entity(player.id)
+        # fire movement rules
+        await world.scripts.fire_rule("player_enter", player=player, room=room, world=world)
         return f"You head {direction}."
 
-    async def _look(self, player: "Player", game_state) -> str:
-        room = game_state.world.get_room(player.room_id)
+    async def _look(self, player: "Player", world: "WorldInstance") -> str:
+        room = world.map.get_room(player.room_id)
         if room is None:
             return "You are in a void."
         exits = ", ".join(room.exits.keys()) or "none"
         others = [
-            game_state.players[eid].name
+            world.players[eid].name
             for eid in room.entity_ids
-            if eid in game_state.players and eid != player.id
+            if eid in world.players and eid != player.id
+        ]
+        npcs = [
+            world.npcs[eid].name
+            for eid in room.entity_ids
+            if eid in world.npcs
+        ]
+        monsters = [
+            world.monsters[eid].name
+            for eid in room.entity_ids
+            if eid in world.monsters
         ]
         parts = [room.name, room.description, f"Exits: {exits}"]
         if others:
             parts.append("Also here: " + ", ".join(others))
+        if npcs:
+            parts.append("NPCs: " + ", ".join(npcs))
+        if monsters:
+            parts.append("Enemies: " + ", ".join(monsters))
         return "\n".join(parts)
 
-    async def _llm_handle(self, player: "Player", text: str, game_state) -> str:
-        room = game_state.world.get_room(player.room_id)
+    async def _llm_handle(self, player: "Player", text: str, world: "WorldInstance") -> str:
+        room = world.map.get_room(player.room_id)
         room_ctx = f"{room.name}: {room.description}" if room else "unknown location"
 
         system_prompt = (
-            "You are the Game Master of a multiplayer dungeon. "
+            f"You are the Game Master of '{world.name}'. "
             "Respond in 1-3 sentences. Stay in character. "
             "You may describe new things the player discovers. "
             "If you create a new room, item, or NPC, output a JSON block tagged "
@@ -106,15 +121,11 @@ class GMInterpreter:
             log.warning("Ollama request failed: %s", exc)
             response_text = "The air shimmers strangely. (GM unavailable)"
 
-        # parse any ```create``` blocks the LLM emitted
-        await self._apply_creations(response_text, room.id if room else None, game_state)
-
-        # strip the JSON block from the player-visible text
+        await self._apply_creations(response_text, room.id if room else None, world)
         visible = response_text.split("```create")[0].strip()
         return visible or "Nothing seems to happen."
 
-    async def _apply_creations(self, text: str, current_room_id: str | None, game_state):
-        """Parse ```create ... ``` blocks and add new content to the world."""
+    async def _apply_creations(self, text: str, current_room_id: str | None, world: "WorldInstance"):
         import re
         blocks = re.findall(r"```create\s*(\{.*?\})\s*```", text, re.DOTALL)
         for block in blocks:
@@ -122,39 +133,36 @@ class GMInterpreter:
                 obj = json.loads(block)
                 kind = obj.get("type")
                 if kind == "room":
-                    await self._create_room(obj, current_room_id, game_state)
+                    await self._create_room(obj, current_room_id, world)
                 elif kind == "item":
-                    await self._create_item(obj, current_room_id, game_state)
+                    await self._create_item(obj, current_room_id, world)
                 elif kind == "npc":
-                    await self._create_npc(obj, current_room_id, game_state)
+                    await self._create_npc(obj, current_room_id, world)
             except Exception:
                 log.warning("Failed to apply GM creation block: %s", block)
 
-    async def _create_room(self, obj: dict, from_room_id: str | None, game_state):
+    async def _create_room(self, obj: dict, from_room_id: str | None, world: "WorldInstance"):
         from world.room import Room
         import uuid
         room_id = obj.get("id") or str(uuid.uuid4())
         room = Room(
-            id=room_id,
-            name=obj.get("name", "Unknown Room"),
+            id=room_id, name=obj.get("name", "Unknown Room"),
             description=obj.get("description", ""),
-            zone_id=obj.get("zone_id", "town"),
-            x=obj.get("x", 0),
-            y=obj.get("y", 0),
+            zone_id=obj.get("zone_id", "default"),
+            x=obj.get("x", 0), y=obj.get("y", 0),
             gm_generated=True,
         )
-        game_state.world.add_room(room)
+        world.map.add_room(room)
         if from_room_id and obj.get("direction"):
-            origin = game_state.world.get_room(from_room_id)
+            origin = world.map.get_room(from_room_id)
             if origin:
                 origin.add_exit(obj["direction"], room_id)
-                _REVERSE = {"north": "south", "south": "north", "east": "west", "west": "east"}
-                rev = _REVERSE.get(obj["direction"])
+                rev = _REVERSE_DIR.get(obj["direction"])
                 if rev:
                     room.add_exit(rev, from_room_id)
-        log.info("GM created room: %s", room.name)
+        log.info("[%s] GM created room: %s", world.id, room.name)
 
-    async def _create_item(self, obj: dict, room_id: str | None, game_state):
+    async def _create_item(self, obj: dict, room_id: str | None, world: "WorldInstance"):
         from entities.item import Item
         import uuid
         item = Item(
@@ -165,16 +173,25 @@ class GMInterpreter:
             gm_generated=True,
             room_id=room_id,
         )
-        log.info("GM created item: %s", item.name)
+        world.items[item.id] = item
+        if room_id:
+            room = world.map.get_room(room_id)
+            if room:
+                room.add_entity(item.id)
+        log.info("[%s] GM created item: %s", world.id, item.name)
 
-    async def _create_npc(self, obj: dict, room_id: str | None, game_state):
+    async def _create_npc(self, obj: dict, room_id: str | None, world: "WorldInstance"):
         from entities.npc import NPC
         import uuid
         npc = NPC(
             id=obj.get("id") or str(uuid.uuid4()),
             name=obj.get("name", "Stranger"),
             description=obj.get("description", ""),
-            room_id=room_id or "town_square",
+            room_id=room_id or world.map.default_entry_room(),
             gm_generated=True,
         )
-        log.info("GM created NPC: %s", npc.name)
+        world.npcs[npc.id] = npc
+        room = world.map.get_room(npc.room_id)
+        if room:
+            room.add_entity(npc.id)
+        log.info("[%s] GM created NPC: %s", world.id, npc.name)

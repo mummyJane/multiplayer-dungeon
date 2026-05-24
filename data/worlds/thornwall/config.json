@@ -1,0 +1,7 @@
+{
+  "id": "thornwall",
+  "name": "Thornwall",
+  "description": "A weathered frontier town on the edge of a dark forest.",
+  "max_players": 50,
+  "ollama_model": "llama3"
+}

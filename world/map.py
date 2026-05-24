@@ -8,8 +8,19 @@ class WorldMap:
     def __init__(self):
         self._rooms: dict[str, Room] = {}
         self._zones: dict[str, Zone] = {}
+        self._entry_room_id: str | None = None
 
     # --- rooms ---
+
+    def set_entry_room(self, room_id: str):
+        self._entry_room_id = room_id
+
+    def default_entry_room(self) -> str:
+        if self._entry_room_id:
+            return self._entry_room_id
+        if self._rooms:
+            return next(iter(self._rooms))
+        return "void"
 
     def add_room(self, room: Room) -> Room:
         self._rooms[room.id] = room

@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from api.routes import router
-from api.state import game_state
+from admin.routes import admin_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,18 +14,20 @@ logging.basicConfig(
 
 app = FastAPI(title="Dungeon")
 
-# serve static assets
 WEB_DIR = Path(__file__).parent / "web"
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 app.include_router(router)
+app.include_router(admin_router)
 
 
 @app.on_event("startup")
 async def startup():
-    game_state.world.seed_starter_world()
-    game_state.start_loop()
-    logging.getLogger(__name__).info("World seeded. Game loop started.")
+    from api.state import registry
+    registry.load_from_disk()
+    log = logging.getLogger(__name__)
+    worlds = registry.all()
+    log.info("Loaded %d world(s): %s", len(worlds), [w.id for w in worlds])
 
 
 if __name__ == "__main__":

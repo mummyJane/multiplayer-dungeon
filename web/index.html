@@ -9,10 +9,11 @@
 <body>
   <div id="app">
     <div id="room-panel">
+      <div id="world-tag"></div>
       <h2 id="room-name">...</h2>
       <p id="room-desc"></p>
       <div id="exits-bar">Exits: <span id="exits"></span></div>
-      <div id="players-bar" hidden>Also here: <span id="players-here"></span></div>
+      <div id="people-bar"></div>
     </div>
 
     <div id="output-panel">
@@ -24,12 +25,23 @@
       <button id="cmd-send">Send</button>
     </div>
 
-    <div id="connect-overlay">
-      <div id="connect-box">
-        <h1>Dungeon</h1>
-        <p>Enter your name to begin</p>
-        <input id="name-input" type="text" maxlength="24" placeholder="Name..." autocomplete="off">
-        <button id="connect-btn">Enter</button>
+    <!-- World selection overlay -->
+    <div id="world-overlay" class="overlay">
+      <div class="overlay-box">
+        <h1>Choose a World</h1>
+        <div id="world-list">Loading worlds…</div>
+        <p id="world-error" class="error hidden"></p>
+      </div>
+    </div>
+
+    <!-- Name entry overlay -->
+    <div id="name-overlay" class="overlay hidden">
+      <div class="overlay-box">
+        <h1 id="name-world-title"></h1>
+        <p>Enter your name</p>
+        <input id="name-input" type="text" maxlength="24" placeholder="Name…" autocomplete="off">
+        <button id="name-btn">Enter</button>
+        <button id="back-btn" class="muted">← Back</button>
       </div>
     </div>
   </div>

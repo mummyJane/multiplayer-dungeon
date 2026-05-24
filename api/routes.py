@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -17,42 +17,71 @@ async def index():
 
 @router.get("/health")
 async def health():
-    return {"status": "ok"}
+    from api.state import registry
+    return {
+        "status": "ok",
+        "worlds": [{"id": w.id, "name": w.name, "players": w.player_count} for w in registry.all()],
+    }
 
 
-@router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
-    from .state import game_state   # late import to avoid circular
-    sessions = game_state.sessions
-    gm = game_state.gm
+@router.get("/worlds")
+async def list_worlds():
+    from api.state import registry
+    return [
+        {
+            "id": w.id,
+            "name": w.name,
+            "description": w.config.description,
+            "players": w.player_count,
+            "max_players": w.config.max_players,
+        }
+        for w in registry.all()
+    ]
 
+
+@router.websocket("/ws/{world_id}")
+async def ws_endpoint(ws: WebSocket, world_id: str):
+    from api.state import registry
+
+    world = registry.get(world_id)
+    if world is None:
+        await ws.close(code=4004, reason="World not found")
+        return
+
+    sessions = world.sessions
     session_id = sessions.new_session_id()
     await sessions.connect(session_id, ws)
 
     try:
-        # ask for player name
         await sessions.send(session_id, {"type": "prompt", "text": "Enter your name:"})
         data = await ws.receive_json()
-        player_name = str(data.get("text", "Unknown"))[:24].strip() or "Unknown"
+        player_name = str(data.get("text", "")).strip()[:24] or "Wanderer"
 
-        player = game_state.join(session_id, player_name)
+        player = world.join(session_id, player_name)
+
         await sessions.send(session_id, {
             "type": "welcome",
             "player_id": player.id,
             "name": player.name,
+            "world": world.name,
         })
-        await game_state.send_room_view(session_id, player)
+        await world.send_room_view(session_id, player)
+
+        # fire player_enter rule
+        room = world.map.get_room(player.room_id)
+        await world.scripts.fire_rule("player_enter", player=player, room=room, world=world)
 
         while True:
             data = await ws.receive_json()
             text = str(data.get("text", "")).strip()
-            if text:
-                response = await gm.handle(player, text, game_state)
-                await sessions.send(session_id, {"type": "message", "text": response})
-                await game_state.send_room_view(session_id, player)
+            if not text:
+                continue
+            response = await world.gm.handle(player, text, world)
+            await sessions.send(session_id, {"type": "message", "text": response})
+            await world.send_room_view(session_id, player)
 
     except WebSocketDisconnect:
         pass
     finally:
-        game_state.leave(session_id)
+        world.leave(session_id)
         sessions.disconnect(session_id)

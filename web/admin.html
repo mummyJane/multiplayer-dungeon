@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Dungeon</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div id="admin-app">
+    <header>
+      <h1>World Admin</h1>
+      <div id="auth-bar">
+        <input id="admin-key" type="password" placeholder="Admin key…">
+        <button id="auth-btn">Authenticate</button>
+        <span id="auth-status"></span>
+      </div>
+    </header>
+
+    <section id="worlds-section">
+      <h2>Active Worlds</h2>
+      <table id="worlds-table">
+        <thead><tr><th>ID</th><th>Name</th><th>Players</th><th>Actions</th></tr></thead>
+        <tbody id="worlds-tbody"></tbody>
+      </table>
+    </section>
+
+    <section id="generate-section">
+      <h2>Generate World with Claude</h2>
+      <p class="muted">Describe a theme — Claude will generate rooms, NPCs, monsters, and starter scripts.</p>
+      <textarea id="theme-input" rows="4" placeholder="e.g. A sunken elven city beneath a frozen lake, haunted by ice wraiths…"></textarea>
+      <button id="generate-btn">Generate World</button>
+      <div id="generate-status"></div>
+    </section>
+
+    <section id="manual-section">
+      <h2>Create Blank World</h2>
+      <div class="form-row">
+        <input id="manual-id" type="text" placeholder="world-id (slug)">
+        <input id="manual-name" type="text" placeholder="Display Name">
+        <button id="manual-btn">Create</button>
+      </div>
+      <div id="manual-status"></div>
+    </section>
+  </div>
+
+  <script src="/static/js/admin.js"></script>
+</body>
+</html>

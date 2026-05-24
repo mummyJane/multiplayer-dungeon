@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player Dashboard</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/player.css">
+</head>
+<body>
+  <div id="dash-app">
+
+    <!-- ── login overlay ── -->
+    <div id="login-overlay" class="overlay">
+      <div class="overlay-box">
+        <h1>Player Dashboard</h1>
+        <p class="muted" style="margin-bottom:.5rem">Sign in with your game account</p>
+        <input id="d-user" type="text" maxlength="32" placeholder="Username" autocomplete="username">
+        <input id="d-pass" type="password" maxlength="64" placeholder="Password" autocomplete="current-password">
+        <button id="d-login-btn">Sign In</button>
+        <p id="d-login-err" class="error hidden"></p>
+        <a href="/" class="back-link">← Back to game</a>
+      </div>
+    </div>
+
+    <!-- ── dashboard ── -->
+    <div id="dashboard" class="hidden">
+      <header id="dash-header">
+        <h1>Player Dashboard</h1>
+        <div id="dash-user-bar">
+          <span id="dash-username" class="muted"></span>
+          <a href="/" class="btn-link">Play</a>
+          <button id="d-logout-btn" class="muted">Sign Out</button>
+        </div>
+      </header>
+
+      <!-- tab bar -->
+      <div id="dash-tabs" class="tab-bar-h">
+        <button class="dtab active" data-tab="profile">Profile</button>
+        <button class="dtab" data-tab="worlds">My Worlds</button>
+        <button class="dtab" data-tab="story">Story Log</button>
+      </div>
+
+      <!-- ── Profile tab ── -->
+      <div id="dtab-profile" class="dtab-panel">
+        <section>
+          <h2>Identity</h2>
+          <div class="form-grid2">
+            <label>Email address<input id="p-email" type="email" maxlength="128" placeholder="you@example.com"></label>
+            <label>Sex / gender<input id="p-sex" type="text" maxlength="64" placeholder="e.g. female, nonbinary…"></label>
+            <label>Real age (approx)<input id="p-age" type="text" maxlength="16" placeholder="e.g. adult, 25…"></label>
+          </div>
+          <label class="full-label">Character description
+            <textarea id="p-desc" rows="4" maxlength="1000" placeholder="Physical appearance, bio, notes for GMs…"></textarea>
+          </label>
+          <button id="p-save-btn">Save Profile</button>
+          <span id="p-save-msg" class="save-msg hidden"></span>
+        </section>
+
+        <section>
+          <h2>Change Password</h2>
+          <div class="form-grid2">
+            <label>Current password<input id="pw-old" type="password" maxlength="64"></label>
+            <label>New password<input id="pw-new" type="password" maxlength="64"></label>
+          </div>
+          <button id="pw-save-btn">Change Password</button>
+          <span id="pw-save-msg" class="save-msg hidden"></span>
+        </section>
+      </div>
+
+      <!-- ── Worlds tab ── -->
+      <div id="dtab-worlds" class="dtab-panel hidden">
+        <section>
+          <h2>Worlds Visited</h2>
+          <p id="worlds-empty" class="muted hidden">You haven't entered any worlds yet.</p>
+          <div id="worlds-list"></div>
+        </section>
+      </div>
+
+      <!-- ── Story tab ── -->
+      <div id="dtab-story" class="dtab-panel hidden">
+        <section>
+          <div id="story-controls">
+            <select id="story-world-select"><option value="">— pick a world —</option></select>
+            <button id="story-export-btn" class="hidden">Export as text</button>
+          </div>
+          <div id="story-log"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/player.js"></script>
+</body>
+</html>

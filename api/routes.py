@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse
 from pathlib import Path
 
 from auth.accounts import AccountManager
+from storage.story_log import StoryLog
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -98,6 +99,7 @@ async def ws_endpoint(ws: WebSocket, world_id: str):
 
         # ── join world ────────────────────────────────────────────────────────
         player = world.join(session_id, player_name, username=username)
+        story = StoryLog(username, world_id) if username else None
 
         await sessions.send(session_id, {
             "type": "welcome",
@@ -149,6 +151,8 @@ async def ws_endpoint(ws: WebSocket, world_id: str):
         # ── auto-look: print room description as text on arrival ─────────────
         look_text = await world.gm._look(player, world)
         await sessions.send(session_id, {"type": "message", "text": look_text})
+        if story:
+            _log_room(story, player, world)
 
         # ── main game loop ────────────────────────────────────────────────────
         while True:
@@ -156,17 +160,45 @@ async def ws_endpoint(ws: WebSocket, world_id: str):
             text = str(data.get("text", "")).strip()
             if not text:
                 continue
+            if story:
+                story.append("player_say", text=text)
+            prior_room_id = player.room_id
             try:
                 response = await world.gm.handle(player, text, world)
             except Exception as exc:
                 log.exception("[%s] handle() error for %s: %s", world_id, player_name, exc)
                 response = "Something went wrong. (server error)"
+            if story:
+                story.append("gm_reply", text=response)
             await sessions.send(session_id, {"type": "message", "text": response})
             await world.send_room_view(session_id, player)
             await world.send_status(session_id, player)
+            # auto-look: when movement changes the room, print room description
+            if player.room_id != prior_room_id:
+                look_text = await world.gm._look(player, world)
+                await sessions.send(session_id, {"type": "message", "text": look_text})
+                if story:
+                    _log_room(story, player, world)
 
     except WebSocketDisconnect:
         pass
     finally:
         world.leave(session_id)
         sessions.disconnect(session_id)
+
+
+def _log_room(story: "StoryLog", player, world):
+    room = world.map.get_room(player.room_id)
+    if room is None:
+        return
+    npcs   = [world.npcs[e].name  for e in room.entity_ids if e in world.npcs]
+    items  = [world.items[e].name for e in room.entity_ids if e in world.items]
+    story.append(
+        "enter_room",
+        room_id=room.id,
+        room_name=room.name,
+        description=room.description,
+        exits=list(room.exits.keys()),
+        npcs=npcs,
+        items=items,
+    )

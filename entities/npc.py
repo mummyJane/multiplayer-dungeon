@@ -12,4 +12,8 @@ class NPC:
     # script id to run each tick
     behaviour_script: str = "idle"
     properties: dict = field(default_factory=dict)
-    gm_generated: bool = False
+    creator: str | None = None
+
+    @property
+    def gm_generated(self) -> bool:
+        return self.creator is not None

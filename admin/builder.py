@@ -364,7 +364,7 @@ def materialise_world(data: dict) -> Path:
             f"    world.map.add_room(Room(id={r['id']!r}, name={r['name']!r}, "
             f"description={r['description']!r}, zone_id={r['zone_id']!r}, "
             f"x={r.get('x', 0)}, y={r.get('y', 0)}, z={z_val}, "
-            f"exits={exits_repr}, properties={props_repr}, gm_generated=True))"
+            f"exits={exits_repr}, properties={props_repr}, creator="claude_api"))"
         )
         if r.get("entry"):
             entry_room_id = r["id"]
@@ -377,7 +377,7 @@ def materialise_world(data: dict) -> Path:
         lines.append(
             f"    world.npcs[{n['id']!r}] = NPC(id={n['id']!r}, name={n['name']!r}, "
             f"description={n['description']!r}, room_id={n['room_id']!r}, "
-            f"dialogue={dialogue_repr}, properties={props_repr}, gm_generated=True)"
+            f"dialogue={dialogue_repr}, properties={props_repr}, creator="claude_api")"
         )
 
     for m in data.get("monsters", []):
@@ -395,7 +395,7 @@ def materialise_world(data: dict) -> Path:
             f"    world.items[{item['id']!r}] = Item(id={item['id']!r}, "
             f"name={item['name']!r}, description={item['description']!r}, "
             f"item_type={item.get('item_type', 'misc')!r}, {room_arg}, "
-            f"properties={props_repr}, gm_generated=True)"
+            f"properties={props_repr}, creator="claude_api")"
         )
 
     (world_dir / "seed.py").write_text("\n".join(lines), encoding="utf-8")

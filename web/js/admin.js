@@ -296,14 +296,14 @@ async function openWorldEditor(worldId) {
   $("ed-model").value      = detail.config.ollama_model;
   $("ed-maxplayers").value = detail.config.max_players;
 
-  const gmBadge = '<span class="gm-badge">ai</span>';
+  const creatorBadge = c => c ? `<span class="gm-badge creator-${c.replace(/[^a-z_]/g,'_')}">${c === "claude_api" ? "claude" : c.startsWith("local_llm") ? "llm" : c}</span>` : "";
 
   // populate rooms table
   $("ed-rooms-count").textContent = `${detail.rooms.length} rooms`;
   $("ed-rooms-table").querySelector("tbody").innerHTML = detail.rooms.map(r => {
     const exits = Object.entries(r.exits).map(([d,t]) => `${d}→${t}`).join(", ") || "—";
     const rtype = r.properties?.room_type || "—";
-    const gm    = r.gm_generated ? gmBadge : "";
+    const gm    = creatorBadge(r.creator);
     return `<tr>
       <td class="mono">${r.id}</td>
       <td>${r.name}${gm}</td>
@@ -321,7 +321,7 @@ async function openWorldEditor(worldId) {
     const shift = n.properties?.shift
       ? `${n.properties.shift} ${n.properties.shift_start||""}–${n.properties.shift_end||""}`
       : "—";
-    const gm    = n.gm_generated ? gmBadge : "";
+    const gm    = creatorBadge(n.creator);
     return `<tr>
       <td class="mono">${n.id}</td>
       <td>${n.name}${gm}</td>
@@ -335,7 +335,7 @@ async function openWorldEditor(worldId) {
   // populate items table
   $("ed-items-count").textContent = `${detail.items.length} items`;
   $("ed-items-table").querySelector("tbody").innerHTML = detail.items.map(i => {
-    const gm    = i.gm_generated ? gmBadge : "";
+    const gm    = creatorBadge(i.creator);
     const props = Object.entries(i.properties || {})
       .map(([k, v]) => `${k}:${JSON.stringify(v)}`).join(", ") || "—";
     return `<tr>

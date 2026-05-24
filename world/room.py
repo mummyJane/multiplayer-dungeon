@@ -18,8 +18,12 @@ class Room:
     entity_ids: list[str] = field(default_factory=list)
     # arbitrary script-defined properties
     properties: dict = field(default_factory=dict)
-    # set True when the GM created this at runtime
-    gm_generated: bool = False
+    # who created this entity: "claude_api", "local_llm", None = seeder/manual
+    creator: str | None = None
+
+    @property
+    def gm_generated(self) -> bool:
+        return self.creator is not None
 
     def add_exit(self, direction: str, target_room_id: str):
         self.exits[direction.lower()] = target_room_id

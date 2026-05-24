@@ -1,0 +1,59 @@
+/* ── player dashboard ── */
+#dash-app { min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+#dash-header {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  padding: 1rem 2rem; border-bottom: 1px solid var(--border);
+  background: var(--panel-bg);
+}
+#dash-header h1 { color: var(--accent); font-size: 1.3rem; flex: 1; margin: 0; }
+#dash-user-bar { display: flex; align-items: center; gap: .75rem; }
+
+/* tab bar */
+.tab-bar-h { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 2rem; background: var(--panel-bg); }
+.dtab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-family: var(--font); font-size: 13px; padding: .6rem 1.2rem; cursor: pointer; margin-bottom: -1px; }
+.dtab:hover { color: var(--text); }
+.dtab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.dtab-panel { max-width: 800px; margin: 0 auto; padding: 1.5rem 2rem; }
+.dtab-panel section { margin-bottom: 2rem; }
+.dtab-panel h2 { color: var(--accent); font-size: 1rem; margin-bottom: .75rem; border-bottom: 1px solid var(--border); padding-bottom: .4rem; }
+
+/* profile form */
+.form-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .75rem; margin-bottom: .75rem; }
+.form-grid2 label, .full-label { display: flex; flex-direction: column; gap: .2rem; font-size: 12px; color: var(--muted); margin-bottom: .5rem; }
+.form-grid2 input, .full-label textarea { font-size: 13px; }
+.full-label textarea { resize: vertical; }
+.save-msg { font-size: 12px; margin-left: .75rem; }
+.save-msg.ok-msg  { color: var(--accent); }
+.save-msg.err-msg { color: var(--error); }
+
+/* world cards */
+.world-entry { border: 1px solid var(--border); padding: .75rem 1rem; margin-bottom: .5rem; display: flex; align-items: flex-start; gap: 1rem; }
+.world-entry-info { flex: 1; }
+.world-entry .we-name { color: var(--accent); font-size: 13px; margin-bottom: .2rem; }
+.world-entry .we-meta { font-size: 12px; color: var(--muted); }
+.world-entry .we-context { margin-top: .4rem; }
+.world-entry .we-context textarea { font-size: 12px; height: 3rem; resize: vertical; }
+.world-entry-actions { display: flex; flex-direction: column; gap: .3rem; }
+.world-entry-actions button { font-size: 12px; padding: .3rem .7rem; }
+
+/* story log */
+#story-controls { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+#story-controls select { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); font-family: var(--font); font-size: 13px; padding: .35rem .5rem; }
+.story-entry { padding: .4rem 0; border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.5; display: flex; gap: .75rem; }
+.story-ts { color: var(--muted); font-size: 11px; white-space: nowrap; padding-top: .1rem; min-width: 85px; }
+.story-body { flex: 1; }
+.story-type-enter_room .story-label { color: var(--accent); }
+.story-type-player_say  .story-label { color: var(--text); }
+.story-type-gm_reply    .story-label { color: var(--muted); }
+.story-type-npc_say     .story-label { color: #bf9f7f; }
+.story-room-name { font-weight: bold; }
+.story-room-desc { color: var(--muted); font-size: 12px; }
+.story-extras { font-size: 11px; color: var(--muted); margin-top: .15rem; }
+
+/* back link */
+.back-link { color: var(--muted); font-size: 12px; text-decoration: none; margin-top: .5rem; display: inline-block; }
+.back-link:hover { color: var(--text); }
+.btn-link { color: var(--accent); font-size: 13px; text-decoration: none; border: 1px solid var(--border); padding: .3rem .8rem; }
+.btn-link:hover { border-color: var(--accent); }

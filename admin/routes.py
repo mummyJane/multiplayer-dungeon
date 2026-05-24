@@ -250,6 +250,7 @@ async def world_detail(world_id: str, _=Depends(_require_admin)):
             "x": r.x, "y": r.y, "z": r.z,
             "exits":        r.exits,
             "properties":   r.properties,
+            "creator":      r.creator,
             "gm_generated": r.gm_generated,
         }
         for r in sorted(world.map._rooms.values(), key=lambda r: (r.z, r.y, r.x))
@@ -261,6 +262,7 @@ async def world_detail(world_id: str, _=Depends(_require_admin)):
             "description":  n.description,
             "room_id":      n.room_id,
             "properties":   n.properties,
+            "creator":      n.creator,
             "gm_generated": n.gm_generated,
         }
         for n in sorted(world.npcs.values(), key=lambda n: n.name)
@@ -272,6 +274,7 @@ async def world_detail(world_id: str, _=Depends(_require_admin)):
             "item_type":    i.item_type,
             "room_id":      i.room_id or "—",
             "properties":   i.properties,
+            "creator":      i.creator,
             "gm_generated": i.gm_generated,
         }
         for i in sorted(world.items.values(), key=lambda i: i.name)

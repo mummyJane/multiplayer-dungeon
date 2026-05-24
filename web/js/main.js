@@ -243,6 +243,7 @@ function openWS() {
         addMessage(`Welcome to ${msg.world}, ${msg.name}!`, "system");
         $("name-overlay").classList.add("hidden");
         $("auth-overlay").classList.add("hidden");
+        $("quick-actions").classList.remove("hidden");
         pendingAuth = null;
         break;
 
@@ -267,6 +268,7 @@ function openWS() {
     addMessage("Disconnected.", "system");
     selectedWorld = null;
     pendingAuth = null;
+    $("quick-actions").classList.add("hidden");
     loadWorlds();
     $("world-overlay").classList.remove("hidden");
     $("auth-overlay").classList.add("hidden");
@@ -284,6 +286,19 @@ function sendCommand() {
   ws.send(JSON.stringify({ text }));
   input.value = "";
 }
+
+// ── switch world ──────────────────────────────────────────────────────────────
+
+$("switch-world-btn").addEventListener("click", () => {
+  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+  $("quick-actions").classList.add("hidden");
+  selectedWorld = null;
+  pendingAuth = null;
+  loadWorlds();
+  $("world-overlay").classList.remove("hidden");
+  $("auth-overlay").classList.add("hidden");
+  $("name-overlay").classList.add("hidden");
+});
 
 // ── event wiring ─────────────────────────────────────────────────────────────
 

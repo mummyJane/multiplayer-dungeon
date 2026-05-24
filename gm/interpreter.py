@@ -415,7 +415,7 @@ class GMInterpreter:
             description=obj.get("description", ""),
             zone_id=obj.get("zone_id", "default"),
             x=obj.get("x", 0), y=obj.get("y", 0),
-            gm_generated=True,
+            creator="local_llm",
         )
         world.map.add_room(room)
         if from_room_id and obj.get("direction"):
@@ -437,7 +437,7 @@ class GMInterpreter:
             description=obj.get("description", ""),
             item_type=obj.get("item_type", "misc"),
             properties=obj.get("properties", {}),
-            gm_generated=True, room_id=room_id,
+            creator="local_llm", room_id=room_id,
         )
         world.items[item.id] = item
         if room_id:
@@ -455,7 +455,7 @@ class GMInterpreter:
             name=obj.get("name", "Stranger"),
             description=obj.get("description", ""),
             room_id=room_id or world.map.default_entry_room(),
-            gm_generated=True,
+            creator="local_llm",
         )
         world.npcs[npc.id] = npc
         room = world.map.get_room(npc.room_id)

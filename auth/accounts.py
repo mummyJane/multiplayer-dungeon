@@ -20,8 +20,15 @@ class Account:
     password_hash: str   # "salt$hash" hex strings
     created_at: str = ""
     last_login: str = ""
+    # player profile
+    email: str = ""
+    sex: str = ""           # free text, player self-describes
+    real_age: str = ""      # free text, e.g. "25" or "adult"
+    description: str = ""   # physical / bio description the player writes
     # saved world state: keyed by world_id
     world_states: dict = field(default_factory=dict)
+    # per-world context notes: keyed by world_id, arbitrary text
+    world_context: dict = field(default_factory=dict)
 
 
 class AccountManager:
@@ -69,6 +76,44 @@ class AccountManager:
 
     def get(self, username: str) -> Optional[Account]:
         return self._load_account(username.strip().lower())
+
+    def update_profile(self, username: str, **fields) -> tuple[bool, str]:
+        """Update profile fields (email, sex, real_age, description)."""
+        acc = self._load_account(username.strip().lower())
+        if acc is None:
+            return False, "Account not found"
+        allowed = {"email", "sex", "real_age", "description"}
+        for k, v in fields.items():
+            if k in allowed:
+                setattr(acc, k, str(v)[:256])
+        self._save_account(acc)
+        return True, ""
+
+    def change_password(self, username: str, old_pw: str, new_pw: str) -> tuple[bool, str]:
+        username = username.strip().lower()
+        acc = self._load_account(username)
+        if acc is None:
+            return False, "Account not found"
+        if not _verify_password(old_pw, acc.password_hash):
+            return False, "Current password is wrong"
+        if not new_pw or len(new_pw) < 4:
+            return False, "New password must be at least 4 characters"
+        acc.password_hash = _hash_password(new_pw)
+        self._save_account(acc)
+        return True, ""
+
+    def set_world_context(self, username: str, world_id: str, context: str):
+        acc = self._load_account(username.strip().lower())
+        if acc is None:
+            return
+        acc.world_context[world_id] = context
+        self._save_account(acc)
+
+    def get_world_context(self, username: str, world_id: str) -> str:
+        acc = self._load_account(username.strip().lower())
+        if acc is None:
+            return ""
+        return acc.world_context.get(world_id, "")
 
     def save_world_state(self, username: str, world_id: str, state: dict):
         acc = self._load_account(username)

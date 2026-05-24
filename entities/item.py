@@ -12,7 +12,11 @@ class Item:
     weight: float = 0.0
     value: int = 0
     properties: dict = field(default_factory=dict)
-    gm_generated: bool = False
+    creator: str | None = None
+
+    @property
+    def gm_generated(self) -> bool:
+        return self.creator is not None
     owner_id: Optional[str] = None
     room_id: Optional[str] = None
 

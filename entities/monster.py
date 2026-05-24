@@ -15,7 +15,11 @@ class Monster:
     behaviour_script: str = "aggressive"
     loot_table: list[str] = field(default_factory=list)  # item ids
     properties: dict = field(default_factory=dict)
-    gm_generated: bool = False
+    creator: str | None = None
+
+    @property
+    def gm_generated(self) -> bool:
+        return self.creator is not None
 
     @property
     def alive(self) -> bool:

@@ -4,6 +4,39 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.8.0] - 2026-05-24 (creator tagging, story log, player dashboard)
+
+### Added
+- **Creator tagging** — every Room, NPC, Item, and Monster now carries a `creator` field instead of just a bool. Values: `"claude_api"` (admin builder), `"local_llm"` (Ollama GM-spawned), `None` (hand-authored/seeder). Admin UI badges now show "claude" vs "llm" instead of a generic "ai" label.
+- **Auto-look on move** — when a player moves to a new room the room description is automatically printed in the output panel (not just in the side panel). On-join look was already there; this adds the same for every subsequent movement.
+- **Story log** — `storage/story_log.py` appends a JSONL entry for every room the player enters, every command they type, and every GM reply. Logged to `data/players/<username>/worlds/<world_id>/story.jsonl`. Only logged for authenticated (non-guest) players.
+- **Player profile fields** — `Account` now stores `email`, `sex`, `real_age`, `description`, and per-world `world_context` notes. Old accounts load cleanly (fields default to empty string).
+- **Player dashboard** at `/player` — standalone page with three tabs:
+  - *Profile*: edit email, sex/gender, approximate age, character description; change password.
+  - *My Worlds*: all worlds the player has visited with last room, HP, and a per-world notes textarea.
+  - *Story Log*: pick a world, read the chronological story log, export as plain text.
+- **Switch World** button in the game room panel — cleanly disconnects and returns to the world-selection screen without a full page reload.
+- **Dashboard link** in the game room panel — links to `/player` for logged-in players.
+
+### Changed
+- `world/room.py`, `entities/npc.py`, `entities/item.py`, `entities/monster.py` — `gm_generated: bool` replaced with `creator: str | None`; `gm_generated` kept as a computed property for backward compat
+- `gm/interpreter.py` — dynamic GM creations tagged `creator="local_llm"`
+- `admin/builder.py` — generated seed.py uses `creator="claude_api"` on all entities
+- `admin/routes.py` — world detail endpoint returns `creator` field alongside `gm_generated`
+- `web/js/admin.js` — creator badge shows "claude" (teal) or "llm" (amber) text
+- `web/css/style.css` — separate `.creator-claude_api` and `.creator-local_llm` badge colours
+- `api/routes.py` — auto-look after movement, story log hooks wired in
+- `main.py` — `player_router` registered
+
+### New files
+- `storage/story_log.py`
+- `api/player_routes.py`
+- `web/player.html`
+- `web/js/player.js`
+- `web/css/player.css`
+
+---
+
 ## [0.7.2] - 2026-05-24 (fix lazy imports in LLM-generated scripts)
 
 ### Fixed

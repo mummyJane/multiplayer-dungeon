@@ -113,6 +113,10 @@ input:focus, textarea:focus { border-color: var(--accent); }
 #status-flags   { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .1rem; }
 .flag-chip      { font-size: 11px; color: var(--accent); border: 1px solid var(--border); padding: .1rem .35rem; }
 
+/* quick action buttons in room panel */
+.quick-btn { font-size: 11px; padding: .2rem .6rem; text-decoration: none; color: var(--muted); border: 1px solid var(--border); background: var(--input-bg); font-family: var(--font); cursor: pointer; }
+.quick-btn:hover { border-color: var(--accent); color: var(--text); }
+
 /* ── auth overlay ── */
 .tab-bar { display: flex; gap: .25rem; }
 .tab-btn { flex: 1; }
@@ -141,8 +145,10 @@ th { color: var(--muted); }
 .form-row { display: flex; gap: .5rem; }
 .form-row input { flex: 1; }
 
-/* gm-generated badge */
-.gm-badge { font-size: 10px; color: #7fbfbf; border: 1px solid #7fbfbf; padding: .05rem .3rem; margin-left: .3rem; vertical-align: middle; }
+/* creator badges */
+.gm-badge { font-size: 10px; padding: .05rem .3rem; margin-left: .3rem; vertical-align: middle; border: 1px solid; }
+.creator-claude_api { color: #7fbfbf; border-color: #7fbfbf; }
+.creator-local_llm  { color: #bf9f7f; border-color: #bf9f7f; }
 
 /* admin scroll tables */
 .scroll-table { max-height: 320px; overflow-y: auto; }

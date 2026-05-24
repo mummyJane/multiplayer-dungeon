@@ -6,6 +6,7 @@ from pathlib import Path
 
 from api.routes import router
 from admin.routes import admin_router
+from api.player_routes import player_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,6 +20,7 @@ app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 app.include_router(router)
 app.include_router(admin_router)
+app.include_router(player_router)
 
 
 @app.on_event("startup")

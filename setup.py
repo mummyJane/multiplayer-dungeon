@@ -1,10 +1,10 @@
 """
 One-time system setup for the Multiplayer Dungeon.
 
-Run once before first use:
-    python setup.py
+    python setup.py          # uses system Python to bootstrap the local venv
 
 Safe to re-run — skips steps already completed.
+Everything is installed into .venv/ inside this directory.
 """
 import os
 import sys
@@ -16,14 +16,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent
 
-# ── ANSI colours (Windows 10+ supports VT by default) ────────────────────────
-R = "\033[0;31m"   # red
-G = "\033[0;32m"   # green
-Y = "\033[0;33m"   # yellow
-B = "\033[0;34m"   # blue
-C = "\033[0;36m"   # cyan
-W = "\033[1;37m"   # bold white
-X = "\033[0m"      # reset
+# ── ANSI colours ──────────────────────────────────────────────────────────────
+R = "\033[0;31m"
+G = "\033[0;32m"
+Y = "\033[0;33m"
+B = "\033[0;34m"
+C = "\033[0;36m"
+W = "\033[1;37m"
+X = "\033[0m"
 
 
 def ok(msg):   print(f"  {G}[OK]{X}  {msg}")
@@ -31,17 +31,21 @@ def warn(msg): print(f"  {Y}[!!]{X}  {msg}")
 def err(msg):  print(f"  {R}[XX]{X}  {msg}")
 def info(msg): print(f"  {C}[..]{X}  {msg}")
 def hdr(msg):  print(f"\n{W}{msg}{X}")
-
-
-# ── helpers ───────────────────────────────────────────────────────────────────
-
 def ask(prompt, default=""):
     val = input(f"  {B}[?]{X}  {prompt} [{default}]: ").strip()
     return val or default
 
 
-def run(cmd, check=True):
-    return subprocess.run(cmd, shell=True, capture_output=True, text=True, check=check)
+# ── venv paths ────────────────────────────────────────────────────────────────
+
+_IS_WIN = sys.platform == "win32"
+VENV_DIR    = ROOT / ".venv"
+VENV_PYTHON = VENV_DIR / ("Scripts" if _IS_WIN else "bin") / ("python.exe" if _IS_WIN else "python")
+VENV_PIP    = VENV_DIR / ("Scripts" if _IS_WIN else "bin") / ("pip.exe" if _IS_WIN else "pip")
+
+
+def run(cmd, check=True, **kwargs):
+    return subprocess.run(cmd, shell=True, capture_output=True, text=True, check=check, **kwargs)
 
 
 # ── steps ─────────────────────────────────────────────────────────────────────
@@ -50,146 +54,140 @@ def check_python():
     hdr("1. Python version")
     v = sys.version_info
     if v < (3, 11):
-        err(f"Python 3.11+ required, found {v.major}.{v.minor}.{v.micro}")
+        err(f"Python 3.11+ required — found {v.major}.{v.minor}.{v.micro}")
         sys.exit(1)
-    ok(f"Python {v.major}.{v.minor}.{v.micro}")
+    ok(f"Python {v.major}.{v.minor}.{v.micro} (system)")
+
+
+def create_venv():
+    hdr("2. Virtual environment (.venv/)")
+    if VENV_PYTHON.exists():
+        ok(f".venv already exists at {VENV_DIR}")
+        return
+
+    info("Creating .venv …")
+    result = run(f'"{sys.executable}" -m venv "{VENV_DIR}"', check=False)
+    if result.returncode != 0 or not VENV_PYTHON.exists():
+        err("venv creation failed:\n" + result.stderr[-600:])
+        sys.exit(1)
+    ok(f".venv created at {VENV_DIR}")
 
 
 def install_dependencies():
-    hdr("2. Python dependencies")
+    hdr("3. Dependencies (into .venv)")
     req = ROOT / "requirements.txt"
     if not req.exists():
         err("requirements.txt not found")
         sys.exit(1)
 
-    # check if already installed by trying a quick import
-    try:
-        import fastapi, uvicorn, anthropic, httpx  # noqa: F401
-        ok("All packages already installed")
+    # check if already installed inside the venv
+    check = run(
+        f'"{VENV_PYTHON}" -c "import fastapi, uvicorn, anthropic, httpx"',
+        check=False
+    )
+    if check.returncode == 0:
+        ok("All packages already installed in .venv")
         return
-    except ImportError:
-        pass
 
-    info("Installing from requirements.txt …")
-    result = run(f'"{sys.executable}" -m pip install -r "{req}"', check=False)
+    info("Running pip install inside .venv …")
+    result = run(f'"{VENV_PIP}" install -r "{req}"', check=False)
     if result.returncode != 0:
         err("pip install failed:\n" + result.stderr[-800:])
         sys.exit(1)
-    ok("Dependencies installed")
+    ok("Dependencies installed into .venv")
 
 
 def create_env():
-    hdr("3. Environment file (.env)")
+    hdr("4. Environment file (.env)")
     env_path = ROOT / ".env"
-    example_path = ROOT / ".env.example"
-
     if env_path.exists():
         ok(".env already exists — skipping")
         return
 
-    if not example_path.exists():
-        err(".env.example not found")
-        sys.exit(1)
+    print(f"  {C}Creating .env — press Enter to keep defaults.{X}")
 
-    print(f"  {C}Creating .env from template. Press Enter to keep defaults.{X}")
-
-    admin_secret = ask("Admin panel secret (used at /admin)", "changeme")
-    api_key      = ask("Anthropic API key (for world generator, leave blank to skip)", "")
+    admin_secret = ask("Admin panel secret", "changeme")
+    api_key      = ask("Anthropic API key (leave blank to skip)", "")
     ollama_model = ask("Ollama model name", "llama3")
     host         = ask("Server host", "0.0.0.0")
     port         = ask("Server port", "8000")
 
-    lines = [
-        f"ADMIN_SECRET={admin_secret}\n",
-        f"ANTHROPIC_API_KEY={api_key}\n",
-        f"OLLAMA_URL=http://localhost:11434/api/generate\n",
-        f"OLLAMA_MODEL={ollama_model}\n",
-        f"HOST={host}\n",
+    env_path.write_text(
+        f"ADMIN_SECRET={admin_secret}\n"
+        f"ANTHROPIC_API_KEY={api_key}\n"
+        f"OLLAMA_URL=http://localhost:11434/api/generate\n"
+        f"OLLAMA_MODEL={ollama_model}\n"
+        f"HOST={host}\n"
         f"PORT={port}\n",
-    ]
-    env_path.write_text("".join(lines), encoding="utf-8")
+        encoding="utf-8",
+    )
     ok(".env created")
-
     if admin_secret == "changeme":
-        warn("You are using the default admin secret. Change ADMIN_SECRET in .env before going online.")
+        warn("Still using default admin secret — change ADMIN_SECRET in .env before going online")
 
 
 def create_data_dirs():
-    hdr("4. Data directories")
-    dirs = [
-        ROOT / "data" / "worlds",
-        ROOT / "logs",
-    ]
-    for d in dirs:
+    hdr("5. Data directories")
+    for d in [ROOT / "data" / "worlds", ROOT / "logs"]:
         d.mkdir(parents=True, exist_ok=True)
-    ok("data/worlds/ and logs/ present")
+    ok("data/worlds/ and logs/ ready")
 
 
 def check_ollama():
-    hdr("5. Ollama")
-    # check if ollama binary exists
+    hdr("6. Ollama")
     if shutil.which("ollama") is None:
-        warn("ollama binary not found in PATH")
+        warn("ollama not found in PATH")
         warn("Install from https://ollama.ai then re-run setup.py")
-        warn("The server will start without Ollama but the Game Master will be unavailable")
+        warn("Server will start without Ollama but the Game Master will be unavailable")
         return
-
     ok("ollama binary found")
 
-    # check if it's reachable (may not be running yet — that's fine here)
     try:
         urllib.request.urlopen("http://localhost:11434", timeout=2)
-        ok("Ollama is already running at localhost:11434")
+        ok("Ollama is running")
         _check_model()
     except urllib.error.URLError:
-        info("Ollama is not currently running — start.py will launch it automatically")
+        info("Ollama is not running — start.py will start it automatically")
 
 
 def _check_model():
-    """Check whether the configured model is pulled."""
-    model = _read_env_var("OLLAMA_MODEL", "llama3")
+    model = _read_env("OLLAMA_MODEL", "llama3")
     result = run("ollama list", check=False)
     if result.returncode != 0:
-        warn("Could not run 'ollama list'")
         return
     if model not in result.stdout:
-        info(f"Model '{model}' not yet pulled")
-        pull = ask(f"Pull '{model}' now? (can take a few minutes)", "y").lower()
-        if pull == "y":
+        if ask(f"Pull model '{model}' now?", "y").lower() == "y":
             info(f"Pulling {model} …")
             r = run(f"ollama pull {model}", check=False)
-            if r.returncode == 0:
-                ok(f"Model '{model}' pulled")
-            else:
-                warn(f"Pull failed — run 'ollama pull {model}' manually")
+            ok(f"Model '{model}' pulled") if r.returncode == 0 else warn(f"Pull failed — run: ollama pull {model}")
     else:
         ok(f"Model '{model}' is present")
 
 
 def check_worlds():
-    hdr("6. Worlds")
+    hdr("7. Worlds")
     worlds_dir = ROOT / "data" / "worlds"
-    worlds = [d for d in worlds_dir.iterdir() if d.is_dir() and (d / "config.json").exists()]
+    worlds = [d for d in worlds_dir.iterdir() if d.is_dir() and (d / "config.json").exists()] \
+             if worlds_dir.exists() else []
     if worlds:
         ok(f"{len(worlds)} world(s) found: {[w.name for w in worlds]}")
     else:
-        warn("No worlds found in data/worlds/ — create one via the admin panel at /admin")
+        warn("No worlds yet — create one via the admin panel after starting")
 
 
 def print_summary():
     hdr("Setup complete")
     print(f"""
-  To start the server:
+  Start the server:
     {G}python start.py{X}
 
-  Admin panel:  {C}http://localhost:8000/admin{X}
-  Player UI:    {C}http://localhost:8000{X}
+  Everything runs inside {C}.venv/{X} — no manual activation needed.
+  Player UI :  {C}http://localhost:8000{X}
+  Admin panel: {C}http://localhost:8000/admin{X}
 """)
 
 
-# ── utility ───────────────────────────────────────────────────────────────────
-
-def _read_env_var(name, default=""):
+def _read_env(name, default=""):
     env_path = ROOT / ".env"
     if env_path.exists():
         for line in env_path.read_text(encoding="utf-8").splitlines():
@@ -206,6 +204,7 @@ if __name__ == "__main__":
     print(f"{'='*50}{X}")
 
     check_python()
+    create_venv()
     install_dependencies()
     create_env()
     create_data_dirs()

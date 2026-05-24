@@ -4,6 +4,15 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.3.1] - 2026-05-24 (local venv)
+
+### Changed
+- `setup.py` now creates `.venv/` inside the project directory and installs all dependencies into it (no global pip installs)
+- `start.py` detects whether it is running inside `.venv/`; if not, it transparently re-execs itself using `.venv/Scripts/python.exe` (Windows) or `.venv/bin/python` (Unix) so the user never needs to activate manually
+- `.venv/` was already in `.gitignore` — confirmed correct
+
+---
+
 ## [0.3.0] - 2026-05-24 (setup and start scripts)
 
 ### Added

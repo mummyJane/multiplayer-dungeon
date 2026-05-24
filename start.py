@@ -1,27 +1,42 @@
 """
 Pre-flight checks and server launcher for the Multiplayer Dungeon.
 
-    python start.py
+    python start.py          # works from system Python or inside the venv
 
-Checks everything is ready, starts Ollama if needed, then launches the server.
+If .venv/ exists and we're not already inside it, this script re-execs itself
+using the venv Python so all checks and the server run in the local environment.
 """
 import os
 import sys
-import shutil
-import time
-import signal
-import subprocess
-import urllib.request
-import urllib.error
 from pathlib import Path
 
 ROOT = Path(__file__).parent
+
+# ── venv bootstrap (must happen before any third-party imports) ───────────────
+_IS_WIN     = sys.platform == "win32"
+_VENV_DIR   = ROOT / ".venv"
+_VENV_PY    = _VENV_DIR / ("Scripts" if _IS_WIN else "bin") / ("python.exe" if _IS_WIN else "python")
+
+def _inside_venv() -> bool:
+    return Path(sys.executable).resolve() == _VENV_PY.resolve()
+
+if _VENV_PY.exists() and not _inside_venv():
+    # Transparently re-exec inside the venv — user sees no difference
+    os.execv(str(_VENV_PY), [str(_VENV_PY)] + sys.argv)
+
+# ── from here we are running inside .venv (or venv doesn't exist yet) ─────────
+
+import shutil
+import signal
+import subprocess
+import time
+import urllib.request
+import urllib.error
 
 # ── ANSI colours ──────────────────────────────────────────────────────────────
 R = "\033[0;31m"
 G = "\033[0;32m"
 Y = "\033[0;33m"
-B = "\033[0;34m"
 C = "\033[0;36m"
 W = "\033[1;37m"
 X = "\033[0m"
@@ -37,7 +52,6 @@ def hdr(msg):  print(f"\n{W}{msg}{X}")
 # ── config ────────────────────────────────────────────────────────────────────
 
 def load_env():
-    """Load .env into os.environ (simple key=value parser, no deps required)."""
     env_path = ROOT / ".env"
     if not env_path.exists():
         return
@@ -57,9 +71,22 @@ def cfg(key, default=""):
 def check_python():
     v = sys.version_info
     if v < (3, 11):
-        err(f"Python 3.11+ required, found {v.major}.{v.minor}")
+        err(f"Python 3.11+ required — found {v.major}.{v.minor}")
         sys.exit(1)
-    ok(f"Python {v.major}.{v.minor}.{v.micro}")
+    venv_note = f"  {C}(.venv){X}" if _inside_venv() else f"  {Y}(system Python — run setup.py first){X}"
+    ok(f"Python {v.major}.{v.minor}.{v.micro}{venv_note}")
+
+
+def check_venv():
+    if not _VENV_DIR.exists():
+        warn(".venv not found — run  python setup.py  to create it")
+        warn("Continuing with system Python (dependencies may be missing)")
+        return
+    if not _inside_venv():
+        # Should not normally reach here (re-exec above handles it)
+        warn("Not running inside .venv")
+        return
+    ok(f".venv active  ({_VENV_PY})")
 
 
 def check_dependencies():
@@ -69,32 +96,30 @@ def check_dependencies():
             __import__(pkg)
         except ImportError:
             missing.append(pkg)
-
     if missing:
         err(f"Missing packages: {', '.join(missing)}")
-        err("Run  python setup.py  first")
+        err("Run  python setup.py  to install them into .venv")
         sys.exit(1)
-    ok("All Python packages installed")
+    ok("All packages installed")
 
 
 def check_env_file():
     if not (ROOT / ".env").exists():
         warn(".env not found — run  python setup.py  to create it")
-        warn("Using built-in defaults (not suitable for production)")
+        warn("Using built-in defaults")
     else:
         ok(".env loaded")
-
     if cfg("ADMIN_SECRET", "changeme") == "changeme":
         warn("ADMIN_SECRET is still 'changeme' — change it in .env before going online")
 
 
 def check_worlds():
     worlds_dir = ROOT / "data" / "worlds"
-    worlds = [d for d in worlds_dir.iterdir() if d.is_dir() and (d / "config.json").exists()] \
-             if worlds_dir.exists() else []
+    worlds = []
+    if worlds_dir.exists():
+        worlds = [d for d in worlds_dir.iterdir() if d.is_dir() and (d / "config.json").exists()]
     if not worlds:
-        warn("No worlds found in data/worlds/")
-        warn("Create one via the admin panel after the server starts: /admin")
+        warn("No worlds found in data/worlds/ — create one at /admin after the server starts")
     else:
         ok(f"{len(worlds)} world(s) ready: {[w.name for w in worlds]}")
 
@@ -103,7 +128,6 @@ def check_anthropic():
     key = cfg("ANTHROPIC_API_KEY", "")
     if not key or key.startswith("sk-ant-..."):
         warn("ANTHROPIC_API_KEY not set — admin world generator will be unavailable")
-        warn("Set it in .env to enable Claude-powered world creation")
     else:
         ok("Anthropic API key configured")
 
@@ -125,12 +149,12 @@ def ensure_ollama():
     global _ollama_proc
 
     if _ping_ollama():
-        ok("Ollama is running at localhost:11434")
+        ok("Ollama running at localhost:11434")
         _verify_model()
         return
 
     if shutil.which("ollama") is None:
-        warn("Ollama not found in PATH — Game Master will be unavailable")
+        warn("ollama not found — Game Master will be unavailable")
         warn("Install from https://ollama.ai")
         return
 
@@ -145,14 +169,13 @@ def ensure_ollama():
         warn(f"Could not start Ollama: {e}")
         return
 
-    # wait up to 8 seconds for it to become ready
     for i in range(8):
         time.sleep(1)
         if _ping_ollama():
             ok(f"Ollama started (pid {_ollama_proc.pid})")
             _verify_model()
             return
-        info(f"Waiting for Ollama… ({i+1}/8)")
+        info(f"Waiting for Ollama… ({i + 1}/8)")
 
     warn("Ollama did not become ready in time — Game Master may be unavailable")
 
@@ -160,26 +183,19 @@ def ensure_ollama():
 def _verify_model():
     model = cfg("OLLAMA_MODEL", "llama3")
     try:
-        result = subprocess.run(
-            ["ollama", "list"], capture_output=True, text=True, timeout=5
-        )
+        result = subprocess.run(["ollama", "list"], capture_output=True, text=True, timeout=5)
         if model in result.stdout:
-            ok(f"Ollama model '{model}' is available")
+            ok(f"Model '{model}' available")
         else:
             warn(f"Model '{model}' not pulled — run: ollama pull {model}")
     except Exception:
-        pass  # non-critical
+        pass
 
 
 # ── shutdown ──────────────────────────────────────────────────────────────────
 
-_server_proc = None
-
-
 def _shutdown(sig, frame):
     print(f"\n{Y}Shutting down…{X}")
-    if _server_proc:
-        _server_proc.terminate()
     if _ollama_proc:
         info("Stopping Ollama …")
         _ollama_proc.terminate()
@@ -189,8 +205,6 @@ def _shutdown(sig, frame):
 # ── launch ────────────────────────────────────────────────────────────────────
 
 def launch_server():
-    global _server_proc
-
     host = cfg("HOST", "0.0.0.0")
     port = cfg("PORT", "8000")
 
@@ -204,18 +218,12 @@ def launch_server():
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, _shutdown)
 
-    reload_flag = "--reload" if os.environ.get("DEV") else ""
-    cmd = [
-        sys.executable, "-m", "uvicorn",
-        "main:app",
-        "--host", host,
-        "--port", port,
-    ]
-    if reload_flag:
+    cmd = [str(sys.executable), "-m", "uvicorn", "main:app", "--host", host, "--port", str(port)]
+    if os.environ.get("DEV"):
         cmd.append("--reload")
 
-    # exec directly — replaces this process, cleaner logs
-    os.execv(sys.executable, cmd)
+    # replace this process with uvicorn — cleaner logs, single PID
+    os.execv(str(sys.executable), cmd)
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -229,6 +237,7 @@ if __name__ == "__main__":
 
     hdr("Pre-flight checks")
     check_python()
+    check_venv()
     check_dependencies()
     check_env_file()
     check_worlds()

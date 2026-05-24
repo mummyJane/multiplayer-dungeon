@@ -32,8 +32,11 @@ def err(msg):  print(f"  {R}[XX]{X}  {msg}")
 def info(msg): print(f"  {C}[..]{X}  {msg}")
 def hdr(msg):  print(f"\n{W}{msg}{X}")
 def ask(prompt, default=""):
-    val = input(f"  {B}[?]{X}  {prompt} [{default}]: ").strip()
-    return val or default
+    try:
+        val = input(f"  {B}[?]{X}  {prompt} [{default}]: ").strip()
+        return val or default
+    except EOFError:
+        return default
 
 
 # ── venv paths ────────────────────────────────────────────────────────────────
@@ -107,7 +110,11 @@ def create_env():
         ok(".env already exists — skipping")
         return
 
-    print(f"  {C}Creating .env — press Enter to keep defaults.{X}")
+    interactive = sys.stdin.isatty()
+    if interactive:
+        print(f"  {C}Creating .env — press Enter to keep defaults.{X}")
+    else:
+        info("Non-interactive mode — creating .env with defaults (edit it before starting)")
 
     admin_secret = ask("Admin panel secret", "changeme")
     api_key      = ask("Anthropic API key (leave blank to skip)", "")

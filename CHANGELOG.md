@@ -4,6 +4,17 @@ All changes are logged here with timestamps.
 
 ---
 
+## [0.3.0] - 2026-05-24 (setup and start scripts)
+
+### Added
+- `setup.py` — one-time system setup: checks Python version, installs dependencies, creates `.env` interactively, creates data directories, verifies Ollama installation, offers to pull the configured model
+- `start.py` — pre-flight launch script: loads `.env`, checks all packages, warns on default admin secret, verifies worlds exist, checks Anthropic API key, starts Ollama automatically if installed but not running, then exec's uvicorn. Handles SIGINT/SIGTERM cleanly
+- `.env.example` — template for environment variables (ADMIN_SECRET, ANTHROPIC_API_KEY, OLLAMA settings, HOST/PORT)
+- `logs/` directory added to `.gitignore`
+- README updated with setup/start instructions
+
+---
+
 ## [0.2.0] - 2026-05-24 (multi-world architecture)
 
 ### Added

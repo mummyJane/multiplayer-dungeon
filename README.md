@@ -36,16 +36,40 @@ Player (browser) → WebSocket → API
 | `api/` | FastAPI routes + WebSocket endpoints |
 | `web/` | HTMX frontend |
 
-## Running
+## First-time setup
 
 ```bash
-pip install -r requirements.txt
-python main.py
+python setup.py
 ```
 
-Open `http://localhost:8000` in your browser.
+This will:
+- Check your Python version (3.11+ required)
+- Install all dependencies
+- Create a `.env` config file (interactive)
+- Verify Ollama is installed and offer to pull the default model
+- Check that at least one world exists
 
-Requires [Ollama](https://ollama.ai) running locally for the Game Master.
+## Starting the server
+
+```bash
+python start.py
+```
+
+Pre-flight checks on every start:
+- All packages present
+- `.env` loaded
+- Ollama running (starts it automatically if installed but not running)
+- At least one world exists
+- Anthropic API key set (warns if missing — only needed for world generation)
+
+Then launches uvicorn. Use `DEV=1 python start.py` for auto-reload mode.
+
+| URL | Description |
+|---|---|
+| `http://localhost:8000` | Player UI (world select → play) |
+| `http://localhost:8000/admin` | Admin panel (create/manage worlds) |
+
+Requires [Ollama](https://ollama.ai) for the in-game Game Master.
 
 ## Change Log
 
